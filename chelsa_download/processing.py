@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple
 
 import geopandas as gpd
 import numpy as np
-import rasterio
 import rioxarray  # type: ignore
 
 
@@ -14,18 +12,6 @@ def load_aoi(path: Path) -> gpd.GeoDataFrame:
     if gdf.crs is None:
         gdf.set_crs(epsg=4326, inplace=True)
     return gdf
-
-
-def read_scale_offset(path: Path) -> Tuple[float, float]:
-    with rasterio.open(path) as src:
-        scale = src.scales[0] if src.scales else 1.0
-        offset = src.offsets[0] if src.offsets else 0.0
-    return float(scale), float(offset)
-
-
-def apply_scale_offset(dataarray, scale: float, offset: float):
-    scaled = dataarray.astype("float32")
-    return scaled * float(scale) + float(offset)
 
 
 def fill_mask(dataarray, nodata: float):
@@ -45,15 +31,13 @@ def fill_mask(dataarray, nodata: float):
 
 
 def clip_scale_and_fill(temp_path: Path, aoi_gdf: gpd.GeoDataFrame, nodata: float):
-    scale, offset = read_scale_offset(temp_path)
     with rioxarray.open_rasterio(temp_path, masked=True) as rds:
         clipped = rds.rio.clip(aoi_gdf.to_crs(rds.rio.crs).geometry, from_disk=True)
         if "band" in clipped.dims and clipped.sizes.get("band") == 1:
             clipped = clipped.squeeze("band", drop=True)
         clipped = fill_mask(clipped, nodata)
-        clipped = apply_scale_offset(clipped, scale, offset)
-        clipped = fill_mask(clipped, nodata)
         clipped = clipped.fillna(nodata)
+        clipped = clipped.astype("float32")
         clipped.rio.write_nodata(nodata, inplace=True)
         return clipped
 

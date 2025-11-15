@@ -1,14 +1,7 @@
 import numpy as np
 import xarray as xr
 
-from chelsa_download.processing import apply_scale_offset, fill_mask
-
-
-def test_apply_scale_offset():
-    arr = xr.DataArray(np.array([1, 2, 3], dtype=np.float32))
-    scaled = apply_scale_offset(arr, scale=0.5, offset=1.0)
-    assert float(scaled[0]) == 1.5
-    assert float(scaled[-1]) == 2.5
+from chelsa_download.processing import fill_mask
 
 
 def test_fill_mask_replaces_values():
