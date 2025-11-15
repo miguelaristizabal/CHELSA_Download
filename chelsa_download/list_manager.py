@@ -38,12 +38,14 @@ class ListFileEntry:
     name: str
     size: Optional[int] = None
     time_id: Optional[int] = None
+    path: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Optional[int | str]]:
         return {
             "name": self.name,
             "size": self.size,
             "time_id": self.time_id,
+            "path": self.path,
         }
 
     @classmethod
@@ -52,6 +54,7 @@ class ListFileEntry:
             name=str(raw["name"]),
             size=int(raw["size"]) if raw.get("size") is not None else None,
             time_id=int(raw["time_id"]) if raw.get("time_id") is not None else None,
+            path=str(raw.get("path")) if raw.get("path") else None,
         )
 
 
@@ -209,6 +212,7 @@ def build_trace_metadata(var: str, entries: Sequence[Dict[str, object]], source_
                 name=name,
                 size=int(entry.get("Size")) if entry.get("Size") is not None else None,
                 time_id=time_id,
+                path=str(entry.get("Path") or entry.get("path") or name),
             )
         )
 
@@ -242,7 +246,13 @@ def build_present_metadata(var: str, entries: Sequence[Dict[str, object]]) -> Li
         match = PRESENT_FILENAME_RE.search(name)
         if match:
             date_range = match.group(2)
-        files.append(ListFileEntry(name=name, size=int(entry.get("Size")) if entry.get("Size") else None))
+        files.append(
+            ListFileEntry(
+                name=name,
+                size=int(entry.get("Size")) if entry.get("Size") else None,
+                path=str(entry.get("Path") or entry.get("path") or name),
+            )
+        )
 
     stats = {
         "count": len(files),

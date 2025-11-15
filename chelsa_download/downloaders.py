@@ -113,7 +113,18 @@ def collect_trace_jobs(
         out_dir = Path(config.trace.output_dir) / variable
         out_dir.mkdir(parents=True, exist_ok=True)
         for entry in metadata.files:
-            remote_path = build_remote_path(config.trace.remote, config.trace.prefix, subdir, entry.name)
+            if entry.path:
+                joined = "/".join(
+                    part
+                    for part in [
+                        config.trace.prefix.strip("/") if config.trace.prefix else "",
+                        entry.path.strip("/"),
+                    ]
+                    if part
+                )
+                remote_path = f"{config.trace.remote}:{joined}"
+            else:
+                remote_path = build_remote_path(config.trace.remote, config.trace.prefix, subdir, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
             out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
             jobs.append(
@@ -158,7 +169,18 @@ def collect_present_jobs(
         out_dir = Path(config.present.output_dir) / subdir
         out_dir.mkdir(parents=True, exist_ok=True)
         for entry in metadata.files:
-            remote_path = build_remote_path(config.present.remote, config.present.prefix, subdir, entry.name)
+            if entry.path:
+                joined = "/".join(
+                    part
+                    for part in [
+                        config.present.prefix.strip("/") if config.present.prefix else "",
+                        entry.path.strip("/"),
+                    ]
+                    if part
+                )
+                remote_path = f"{config.present.remote}:{joined}"
+            else:
+                remote_path = build_remote_path(config.present.remote, config.present.prefix, subdir, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
             out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
             jobs.append(
