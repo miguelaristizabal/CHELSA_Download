@@ -1,0 +1,25 @@
+[paths]
+aoi = "/path/to/aoi.geojson"
+lists_dir = "./lists"
+cache_dir = "./cache"
+trace_filelist_json = "./lists/raw/chelsatrace_filelist.json"
+
+[rclone]
+config = "./envicloud.conf"
+
+[downloads]
+max_workers = 6
+
+[trace]
+remote = "chelsa01_trace21k_bioclim"
+prefix = ""
+lists_subdir = "."
+output_dir = "./outputs/trace"
+nodata_value = -9999.0
+
+[present]
+remote = "chelsa02_bioclim"
+prefix = ""
+lists_subdir = "present"
+output_dir = "./outputs/present"
+nodata_value = -9999.0

@@ -1,0 +1,2 @@
+[console_scripts]
+chelsa-download = chelsa_download.__main__:main
