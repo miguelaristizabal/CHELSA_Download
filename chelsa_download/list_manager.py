@@ -11,7 +11,7 @@ from .config import GlobalConfig, compute_sha1
 
 
 TRACE_FILENAME_RE = re.compile(r"CHELSA[_-]TraCE21k_([a-z0-9]+)_(\-?\d+)_", re.IGNORECASE)
-PRESENT_FILENAME_RE = re.compile(r"CHELSA_[a-z0-9]+_(bio\d{1,2}|scd)_(\d{4}-\d{4})_", re.IGNORECASE)
+PRESENT_FILENAME_RE = re.compile(r"CHELSA_(bio\d{1,2}|scd)_(\d{4}-\d{4})_", re.IGNORECASE)
 
 
 def infer_time_id(filename: str) -> Optional[int]:
