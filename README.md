@@ -1,6 +1,6 @@
 ## CHELSA Download CLI
 
-Download present and past bioclim rasters from [CHELSA](https://www.chelsa-climate.org/) efficiently and only for a region of your choosing.
+A Python CLI to efficiently download present and past bioclim rasters from [CHELSA](https://www.chelsa-climate.org/) only for a region of your choosing.
 
 CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multiâ€‘GB rasters every time you need a small Area of Interest (AOI) is wasteful, especially for the massive TraCE21k archive. `chelsa-download` bundles rclone remotes, curated file lists, and an AOI-first download pipeline so that you only fetch, clip, and keep what you actually need.
 
@@ -8,24 +8,32 @@ CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multiâ
 
 ### Quick start
 
+
+#### 1) (Recommended) create and activate a virtual environment
 ```bash
-# 1) (Recommended) create and activate a virtual environment
 python -m venv .venv
-# macOS/Linux
+```
+##### macOS/Linux
+```bash
 source .venv/bin/activate
-# Windows PowerShell
+```
+##### Windows PowerShell
+```powershell
 .venv\Scripts\Activate.ps1
+```
 
-# 2) Install CHELSA_Download v0.2.1 from the GitHub tag tarball
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.1.tar.gz"
-
-# 3) Run your first download (uses bundled lists and default remotes)
+#### 2) Install CHELSA_Download v0.2.2 from the GitHub tag tarball
+```bash
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.2.tar.gz"
+```
+#### 3) Run your first download (uses bundled lists and default remotes)
+```bash
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
 
 This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory.
 
-To install a different version, replace `v0.2.1` in the URL with the tag you want.
+To install a different version, replace `v0.2.2` in the URL with the tag you want.
 
 #### Development install (from source)
 
