@@ -22,11 +22,24 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-#### 2) Install CHELSA_Download v0.2.3 from the GitHub tag tarball
+#### 2) Ensure Python and rclone are available
+- If you do not yet have Python installed, see the [prerequisites](#prerequisites--recommended-setup) section.
+> **Install rclone (required for downloads):**
+##### Windows
+```powershell
+winget install Rclone.Rclone
+```
+ ##### macOS/Linux
+```bash
+sudo -v ; curl https://rclone.org/install.sh | sudo bash
+```
+  - Verify: `rclone version`
+
+#### 3) Install CHELSA_Download v0.2.3 from the GitHub tag tarball
 ```bash
 python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.3.tar.gz"
 ```
-#### 3) Run your first download (uses bundled lists and default remotes)
+#### 4) Run your first download (uses bundled lists and default remotes)
 ```bash
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
@@ -73,14 +86,15 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 
 1. **Python 3.10+**
    - macOS/Linux: `python3 --version`, install via [python.org](https://www.python.org/downloads/) or `brew install python`.
-   - Windows: [Download the official installer](https://www.python.org/downloads/windows/) and enable “Add python.exe to PATH”.
-   - Create a venv: `python -m venv .venv && source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (PowerShell).
-   - Conda alternative: `conda create -n chelsa python=3.11 && conda activate chelsa`.
+   - Windows: [Download the official installer](https://www.python.org/downloads/windows/) and enable "Add python.exe to PATH".
+   - Preferred Conda path: install [Miniforge](https://conda-forge.org/miniforge/) (optimized for conda-forge) and create an env: `conda create -n chelsa python=3.11 && conda activate chelsa`.
+   - Or create a venv: `python -m venv .venv && source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (PowerShell).
 
      _If you already have your own Python setup, stick with that!_
 
 2. **rclone**
-   - Install instructions: [rclone.org/install](https://rclone.org/install/)
+   - Windows: `winget install Rclone.Rclone`
+   - macOS/Linux: `sudo -v ; curl https://rclone.org/install.sh | sudo bash`
    - Verify: `rclone version`
    - The bundled `envicloud.conf` already contains anonymous remotes for CHELSA v2.1 (`chelsa02_bioclim`) and TraCE21k (`chelsa01_trace21k_bioclim`).
 
