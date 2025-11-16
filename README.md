@@ -9,9 +9,30 @@ CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multiâ
 ### Quick start
 
 ```bash
+# 1) (Recommended) create and activate a virtual environment
+python -m venv .venv
+# macOS/Linux
+source .venv/bin/activate
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# 2) Install CHELSA_Download v0.2.1 from the GitHub tag tarball
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.1.tar.gz"
+
+# 3) Run your first download (uses bundled lists and default remotes)
+chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
+```
+
+This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory.
+
+To install a different version, replace `v0.2.1` in the URL with the tag you want.
+
+#### Development install (from source)
+
+```bash
 # 1) Clone and enter the project
-git clone https://github.com/<your-org>/chelsa-download.git
-cd chelsa-download
+git clone https://github.com/miguelaristizabal/CHELSA_Download.git
+cd CHELSA_Download
 
 # 2) Create and activate a virtual environment
 python -m venv .venv
@@ -20,30 +41,15 @@ source .venv/bin/activate
 # Windows PowerShell
 .venv\Scripts\Activate.ps1
 
-# 3) Install the CLI (+ dev extras if you plan to hack on it)
+# 3) Install the CLI (plus dev extras if you plan to hack on it)
 python -m pip install -e .[dev]
 
-# 4) (Optional) Copy & edit the sample config, or supply --aoi later
+# 4) (Optional) Copy and edit the sample config, or supply --aoi later
 cp chelsa-download.example.toml ~/.chelsa-download.toml
 
-# 5) Run your first download (uses bundled lists + remotes)
+# 5) Run your first download (uses bundled lists and default remotes)
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
-
-This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remotes, and writes clipped rasters to `outputs/present`.
-
-#### Install from a GitHub release (once published)
-
-1. Visit the repository's **Releases** tab and download the latest source archive (e.g., `chelsa-download-v0.2.0.tar.gz`).
-2. Extract it somewhere on disk and enter the folder.
-3. Install directly from that archive:
-
-   ```bash
-   python -m pip install chelsa-download-v0.2.0.tar.gz  # or pip install dist/*.whl if a wheel is provided
-   ```
-
-4. Run the CLI as usual (you can still pass `--aoi` or copy the bundled config). Replace `v0.2.0` with whichever tag you grabbed.
-
 ---
 
 ### Why this tool?
