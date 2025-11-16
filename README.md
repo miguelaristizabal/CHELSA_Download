@@ -43,6 +43,7 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
    ```
 
 4. Run the CLI as usual (you can still pass `--aoi` or copy the bundled config). Replace `v0.2.0` with whichever tag you grabbed.
+5. The first time you run `chelsa-download --aoi ...`, the tool copies the bundled lists + `envicloud.conf` into `~/.chelsa-download/` so you have a writable workspace even though the package was installed from a release archive.
 
 ---
 
@@ -78,12 +79,12 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
 
 ### Configure the tool
 
-You can run entirely from the built-in defaults (just pass `--aoi path/to/aoi`). For more control, copy the sample TOML and tweak the paths—everything is relative to the project directory by default.
+You can run entirely from the built-in defaults (just pass `--aoi path/to/aoi`). On first launch the CLI copies the bundled lists/config into `~/.chelsa-download/` so you get a writable workspace even when installing from PyPI or a GitHub release. For more control, copy the sample TOML and tweak the paths—everything is relative to the project directory by default.
 
 ```toml
 [paths]
 aoi = "./AOI.geojson"                     # user-provided AOI when not using --aoi
-lists_dir = "./lists"                     # bundled list files
+lists_dir = "./lists"                     # defaults copied to ~/.chelsa-download/lists
 cache_dir = "./chelsa_cache"              # SSD scratch space
 trace_filelist_json = "./lists/raw/chelsatrace_filelist.json"
 

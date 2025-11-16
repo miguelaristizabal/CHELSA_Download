@@ -22,8 +22,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
 
+[tool.setuptools]
+include-package-data = true
+
 [project.scripts]
 chelsa-download = "chelsa_download.__main__:main"
+
+[tool.setuptools.package-data]
+chelsa_download = ["data/**/*"]
 
 [tool.setuptools.packages.find]
 where = ["."]

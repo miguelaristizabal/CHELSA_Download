@@ -1,0 +1,21 @@
+{
+  "kind": "present",
+  "variable": "scd",
+  "files": [
+    {
+      "name": "CHELSA_scd_1981-2010_V.2.1.tif",
+      "size": 77418420,
+      "time_id": null,
+      "path": "scd/1981-2010/CHELSA_scd_1981-2010_V.2.1.tif"
+    }
+  ],
+  "generated_at": "2025-11-15T03:47:42.733327",
+  "source": {
+    "type": "rclone"
+  },
+  "list_sha1": "6979fc7d036a20ccf507651ba92898c34071689f",
+  "stats": {
+    "count": 1,
+    "date_range": "1981-2010"
+  }
+}

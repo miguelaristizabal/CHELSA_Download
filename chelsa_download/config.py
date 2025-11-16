@@ -12,6 +12,8 @@ try:  # Python >=3.11
 except ModuleNotFoundError:  # pragma: no cover - fallback for <3.11
     import tomli as tomllib  # type: ignore
 
+from .assets import ensure_default_assets
+
 
 CONFIG_ENV = "CHELSA_DOWNLOAD_CONFIG"
 DEFAULT_CONFIG_PATH = Path.home() / ".chelsa-download.toml"
@@ -106,14 +108,12 @@ class GlobalConfig:
 
     @classmethod
     def default(cls, aoi_path: Path) -> "GlobalConfig":
-        base = PROJECT_ROOT if (PROJECT_ROOT / "lists").exists() else Path.cwd()
-        lists_dir = (base / "lists").resolve()
+        asset_root = ensure_default_assets()
+        lists_dir = (asset_root / "lists").resolve()
         cache_dir = (Path.cwd() / "chelsa_cache").resolve()
         outputs_root = (Path.cwd() / "outputs").resolve()
-        rclone_path = (base / "envicloud.conf").resolve()
-        if not rclone_path.exists():
-            rclone_path = None
-        trace_json = (lists_dir / "raw" / "chelsatrace_filelist.json").resolve()
+        rclone_path = (asset_root / "envicloud.conf").resolve()
+        trace_json = (lists_dir / "raw" / "chelsatrace_filelist.json")
         if not trace_json.exists():
             trace_json = None
 
