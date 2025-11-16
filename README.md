@@ -34,7 +34,7 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
 
 ### Why this tool?
 
-- **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so beginners can run downloads immediately. Regenerate them later with `prepare-lists`.
+- **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so beginners can run downloads immediately. Regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
 - **AOI-centric downloads.** Files land in a cache, get clipped to your AOI, masked cells are filled with the declared nodata, and only the AOI raster is written.
 - **Resilient transfers.** rclone copy/retry logic is wrapped in a reusable helper. Cache files allow resuming long downloads without redownloading everything.
 - **Structured logging & progress.** A single Rich progress bar shows total files, cumulative download size, and live transfer speeds, while the logger records per-file results.
@@ -109,8 +109,8 @@ Each download command consumes the list metadata, pulls the needed files via rcl
 
 | Command | Purpose | Common flags | Typical use |
 | --- | --- | --- | --- |
-| `chelsa-download download-present` | CHELSA v2.1 climatology (1981–2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6` | Clip modern climatology layers for your AOI |
-| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4` | Pull long paleoclimate series for model training |
+| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6` | Clip modern climatology layers for your AOI ([dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332)) |
+| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4` | Pull long paleoclimate series for model training ([dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211)) |
 
 Example:
 
