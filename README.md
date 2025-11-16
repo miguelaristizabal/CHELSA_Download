@@ -22,9 +22,9 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-#### 2) Install CHELSA_Download v0.2.2 from the GitHub tag tarball
+#### 2) Install CHELSA_Download v0.2.3 from the GitHub tag tarball
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.2.tar.gz"
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.3.tar.gz"
 ```
 #### 3) Run your first download (uses bundled lists and default remotes)
 ```bash
@@ -33,7 +33,7 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 
 This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory.
 
-To install a different version, replace `v0.2.2` in the URL with the tag you want.
+To install a different version, replace `v0.2.3` in the URL with the tag you want.
 
 #### Development install (from source)
 
