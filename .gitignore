@@ -1,0 +1,29 @@
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+env.bak/
+
+# Build and packaging
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local data/cache/output directories
+chelsa_cache/
+outputs/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
