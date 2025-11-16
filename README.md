@@ -32,6 +32,18 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 
 This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remotes, and writes clipped rasters to `outputs/present`.
 
+#### Install from a GitHub release (once published)
+
+1. Visit the repository's **Releases** tab and download the latest source archive (e.g., `chelsa-download-v0.2.0.tar.gz`).
+2. Extract it somewhere on disk and enter the folder.
+3. Install directly from that archive:
+
+   ```bash
+   python -m pip install chelsa-download-v0.2.0.tar.gz  # or pip install dist/*.whl if a wheel is provided
+   ```
+
+4. Run the CLI as usual (you can still pass `--aoi` or copy the bundled config). Replace `v0.2.0` with whichever tag you grabbed.
+
 ---
 
 ### Why this tool?
