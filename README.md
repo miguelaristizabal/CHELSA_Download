@@ -1,6 +1,8 @@
 ## CHELSA Download CLI
 
-CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multi‑GB rasters every time you need a small Area of Interest (AOI) is wasteful—especially for the massive TraCE21k archive. `chelsa-download` bundles rclone remotes, curated file lists, and an AOI-first download pipeline so that you only fetch, clip, and keep what you actually need.
+Download present and past bioclim rasters from [CHELSA](https://www.chelsa-climate.org/) efficiently and only for a region of your choosing.
+
+CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multi‑GB rasters every time you need a small Area of Interest (AOI) is wasteful, especially for the massive TraCE21k archive. `chelsa-download` bundles rclone remotes, curated file lists, and an AOI-first download pipeline so that you only fetch, clip, and keep what you actually need.
 
 ---
 
@@ -34,7 +36,7 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
 
 ### Why this tool?
 
-- **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so beginners can run downloads immediately. Regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
+- **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so you can run downloads immediately. If the included lists are out of date, regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
 - **AOI-centric downloads.** Files land in a cache, get clipped to your AOI, masked cells are filled with the declared nodata, and only the AOI raster is written.
 - **Resilient transfers.** rclone copy/retry logic is wrapped in a reusable helper. Cache files allow resuming long downloads without redownloading everything.
 - **Structured logging & progress.** A single Rich progress bar shows total files, cumulative download size, and live transfer speeds, while the logger records per-file results.
@@ -49,6 +51,8 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
    - Create a venv: `python -m venv .venv && source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (PowerShell).
    - Conda alternative: `conda create -n chelsa python=3.11 && conda activate chelsa`.
 
+     _If you already have your own Python setup, stick with that!_
+
 2. **rclone**
    - Install instructions: [rclone.org/install](https://rclone.org/install/)
    - Verify: `rclone version`
@@ -56,13 +60,13 @@ This uses the pre-generated lists shipped in `lists/`, the envicloud rclone remo
 
 3. **AOI geometry**
    - Supply a GeoJSON/GeoPackage/Shapefile readable by GeoPandas.
-   - For the default experience, pass `--aoi path/to/aoi.geojson` the first time you run the CLI.
+   - To try downloading with the default config, just pass `--aoi path/to/aoi.geojson` the first time you run the CLI.
 
 ---
 
 ### Configure the tool
 
-You can run entirely from the built-in defaults (just pass `--aoi path/to/file`). For more control, copy the sample TOML and tweak the paths—everything is relative to the project directory by default.
+You can run entirely from the built-in defaults (just pass `--aoi path/to/aoi`). For more control, copy the sample TOML and tweak the paths—everything is relative to the project directory by default.
 
 ```toml
 [paths]
@@ -91,7 +95,7 @@ Clipped rasters land in the `output_dir` for each section with `_AOI` appended t
 
 ### Generate file lists
 
-The CLI uses `.txt` + `.meta.json` pairs to know exactly which files exist, their sizes, and time ranges. The repo already ships with a fresh set, but here’s how to regenerate them:
+The CLI uses `.txt` + `.meta.json` pairs to know exactly which files exist, their sizes, and time ranges. The repo already ships with a set from 14-Nov-2025, but here’s how to regenerate them:
 
 | Step | Command | Files created | Location | Notes |
 | --- | --- | --- | --- | --- |
@@ -107,10 +111,10 @@ Expect a few minutes for the TraCE21k snapshot and less than a minute for the pr
 
 Each download command consumes the list metadata, pulls the needed files via rclone, writes them to the cache, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. All commands honor global flags such as `--quiet/--verbose`, `--limit`, `--var`, `--force`, and `--max-workers`.
 
-| Command | Purpose | Common flags | Typical use |
-| --- | --- | --- | --- |
-| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6` | Clip modern climatology layers for your AOI ([dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332)) |
-| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4` | Pull long paleoclimate series for model training ([dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211)) |
+| Command | Purpose | Common flags | Typical use | More info |
+| --- | --- | --- | --- | --- |
+| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
+| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
 
 Example:
 
@@ -148,18 +152,3 @@ During downloads you’ll see a single progress bar with:
 - **Wrong files got clipped** – Confirm you regenerated the lists after changing remotes, and verify the AOI path (logged at start-up).
 
 With the bundled lists, default remotes, and AOI override, you can go from zero to clipped CHELSA rasters in a couple of commands—then fine-tune via the TOML whenever you need more control. Happy downloading!
-
----
-
-### Releasing a new version on GitHub
-
-Once you are happy with the README and other polish, follow this checklist to publish a tagged release so users can pin to a stable artifact:
-
-1. **Freeze the code & docs.** Merge all desired changes into `main`/`work` and update `pyproject.toml`'s `version` field (e.g., bump from `0.1.0` to `0.2.0`). Commit the version bump with a message such as `chore: release v0.2.0`.
-2. **Run tests / smoke checks.** Execute `pytest` (and any manual CLI runs) to ensure the tag you are about to cut is green.
-3. **Tag the release locally.** `git tag -a v0.2.0 -m "CHELSA Download v0.2.0"`.
-4. **Push commits and tags.** `git push origin work && git push origin v0.2.0`.
-5. **Create a GitHub Release.** On the repository page, click **Releases → Draft a new release**, select the new tag, give it a title such as `CHELSA Download v0.2.0`, and paste release notes (highlights + breaking changes). Attach any helpful assets (e.g., sample TOML, generated lists) if desired.
-6. **Optional PyPI publish.** If you also distribute via PyPI, build and upload the wheel from the tagged commit: `python -m build && python -m twine upload dist/*`.
-
-Link the release back in the README once published so beginners can install via `pip install chelsa-download==0.2.0` or download the source archive directly from the release page.
