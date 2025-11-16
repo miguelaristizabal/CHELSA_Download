@@ -43,11 +43,31 @@ def main(
         help="Path to chelsa-download TOML configuration file.",
         envvar="CHELSA_DOWNLOAD_CONFIG",
     ),
+    aoi: Optional[Path] = typer.Option(
+        None,
+        "--aoi",
+        help="Path to the AOI file. Required if no config file is available.",
+    ),
     quiet: bool = typer.Option(False, "--quiet", help="Only log warnings and errors."),
     verbose: bool = typer.Option(False, "--verbose", help="Enable debug logging."),
 ):
     logger = setup_logging(verbose=verbose, quiet=quiet)
-    cfg = GlobalConfig.load(config)
+    cfg: GlobalConfig
+    try:
+        cfg = GlobalConfig.load(config)
+        if aoi:
+            cfg.aoi_path = aoi.expanduser().resolve()
+    except FileNotFoundError:
+        chosen_aoi = aoi
+        if chosen_aoi is None:
+            prompt_value = typer.prompt(
+                "Config file not found. Enter the path to your AOI to use built-in defaults"
+            ).strip()
+            if not prompt_value:
+                raise typer.BadParameter("AOI path is required the first time you run the CLI without a config.")
+            chosen_aoi = Path(prompt_value)
+        cfg = GlobalConfig.default(chosen_aoi.expanduser().resolve())
+        logger.info("Using bundled defaults (lists: %s, outputs: %s)", cfg.lists_dir, cfg.present.output_dir.parent)
     ctx.obj = AppContext(cfg, logger, ListManager(cfg))
     logger.debug("Loaded configuration: %s", cfg.to_dict())
 

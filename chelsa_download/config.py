@@ -15,6 +15,8 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for <3.11
 
 CONFIG_ENV = "CHELSA_DOWNLOAD_CONFIG"
 DEFAULT_CONFIG_PATH = Path.home() / ".chelsa-download.toml"
+PACKAGE_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = PACKAGE_ROOT.parent
 
 
 def _expand(path: Optional[str | Path]) -> Optional[Path]:
@@ -101,6 +103,45 @@ class GlobalConfig:
             "present": self.present.__dict__,
             "trace": self.trace.__dict__,
         }
+
+    @classmethod
+    def default(cls, aoi_path: Path) -> "GlobalConfig":
+        base = PROJECT_ROOT if (PROJECT_ROOT / "lists").exists() else Path.cwd()
+        lists_dir = (base / "lists").resolve()
+        cache_dir = (Path.cwd() / "chelsa_cache").resolve()
+        outputs_root = (Path.cwd() / "outputs").resolve()
+        rclone_path = (base / "envicloud.conf").resolve()
+        if not rclone_path.exists():
+            rclone_path = None
+        trace_json = (lists_dir / "raw" / "chelsatrace_filelist.json").resolve()
+        if not trace_json.exists():
+            trace_json = None
+
+        present = TargetConfig(
+            remote="chelsa02_bioclim",
+            prefix="",
+            lists_subdir="present",
+            output_dir=(outputs_root / "present").resolve(),
+            nodata_value=-9999.0,
+        )
+        trace = TargetConfig(
+            remote="chelsa01_trace21k_bioclim",
+            prefix="",
+            lists_subdir=".",
+            output_dir=(outputs_root / "trace").resolve(),
+            nodata_value=-9999.0,
+        )
+
+        return cls(
+            aoi_path=aoi_path.resolve(),
+            lists_dir=lists_dir,
+            cache_dir=cache_dir,
+            rclone_config=rclone_path,
+            max_workers=4,
+            trace_filelist_json=trace_json,
+            present=present,
+            trace=trace,
+        )
 
 
 def compute_sha1(path: Path) -> str:

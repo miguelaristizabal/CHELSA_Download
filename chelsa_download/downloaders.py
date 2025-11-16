@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -10,11 +9,9 @@ from typing import Dict, Iterable, List, Optional
 from rich.progress import (
     BarColumn,
     Progress,
-    TaskID,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
-    TransferSpeedColumn,
 )
 
 from .config import GlobalConfig
@@ -201,41 +198,34 @@ def collect_present_jobs(
     return jobs
 
 
-def _monitor_progress(path: Path, progress: Progress, task_id: TaskID, total: Optional[int], stop_event: threading.Event) -> None:
-    while not stop_event.is_set():
-        if path.exists():
-            size = path.stat().st_size
-            if total:
-                progress.update(task_id, total=total, completed=min(size, total))
-            else:
-                progress.update(task_id, completed=size)
-        time.sleep(0.2)
+def _human_bytes(num: float) -> str:
+    units = ["B", "KB", "MB", "GB", "TB"]
+    value = float(num)
+    for unit in units:
+        if value < 1024.0 or unit == units[-1]:
+            if unit == "B":
+                return f"{int(value)} B"
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return f"{value:.1f} TB"
 
 
-def _download_one(job: DownloadJob, config: GlobalConfig, progress: Progress) -> str:
+def _human_speed(num: float) -> str:
+    return f"{_human_bytes(num)}/s"
+
+
+def _download_one(job: DownloadJob, config: GlobalConfig) -> tuple[str, int, bool]:
     if job.output_path.exists() and not job.force:
-        return f"Skipped (exists): {job.output_path.name}"
+        return f"Skipped (exists): {job.output_path.name}", 0, True
 
-    task_total = job.entry.size if job.entry.size and job.entry.size > 0 else None
-    task_id = progress.add_task(f"{job.variable}", total=task_total)
-    stop_event = threading.Event()
-    monitor = threading.Thread(target=_monitor_progress, args=(job.temp_path, progress, task_id, job.entry.size, stop_event))
-    monitor.daemon = True
-    monitor.start()
-    try:
-        copy_to(job.remote_path, job.temp_path, config_path=config.rclone_config, retries=3)
-        stop_event.set()
-        monitor.join(timeout=1)
-        if job.entry.size and job.temp_path.stat().st_size != job.entry.size:
-            raise RcloneError(
-                f"Downloaded size mismatch for {job.entry.name}: "
-                f"{job.temp_path.stat().st_size} != {job.entry.size}"
-            )
-        progress.update(task_id, completed=job.entry.size or job.temp_path.stat().st_size)
-    finally:
-        stop_event.set()
-    progress.remove_task(task_id)
-    return "downloaded"
+    copy_to(job.remote_path, job.temp_path, config_path=config.rclone_config, retries=3)
+    size_on_disk = job.temp_path.stat().st_size
+    if job.entry.size and size_on_disk != job.entry.size:
+        raise RcloneError(
+            f"Downloaded size mismatch for {job.entry.name}: "
+            f"{size_on_disk} != {job.entry.size}"
+        )
+    return "downloaded", size_on_disk, False
 
 
 def _process_one(job: DownloadJob, aoi, logger) -> str:
@@ -260,35 +250,52 @@ def execute_jobs(jobs: Iterable[DownloadJob], config: GlobalConfig, logger, max_
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
-        TransferSpeedColumn(),
-        TimeRemainingColumn(),
+        TextColumn("{task.completed}/{task.total} files"),
+        TextColumn("{task.fields[downloaded]} @ {task.fields[speed]}"),
         TimeElapsedColumn(),
+        TimeRemainingColumn(),
     )
 
     with progress:
-        overall = progress.add_task("files", total=len(job_list))
+        overall = progress.add_task("files", total=len(job_list), downloaded="0 B", speed="0 B/s")
+        total_bytes = 0
+        start_time = time.time()
+
+        def update_overall(extra_bytes: int):
+            nonlocal total_bytes
+            total_bytes += max(extra_bytes, 0)
+            elapsed = max(time.time() - start_time, 0.001)
+            speed_val = total_bytes / elapsed
+            progress.update(
+                overall,
+                advance=1,
+                downloaded=_human_bytes(total_bytes),
+                speed=_human_speed(speed_val),
+            )
 
         def task_runner(job: DownloadJob):
-            result = _download_one(job, config, progress)
-            if result.startswith("Skipped"):
-                summary["skipped"] += 1
-                return result
+            status_msg, bytes_dl, skipped = _download_one(job, config)
+            if skipped:
+                return status_msg, bytes_dl, "skipped"
             msg = _process_one(job, aoi, logger)
-            summary["processed"] += 1
-            return msg
+            return msg, bytes_dl, "processed"
 
         with ThreadPoolExecutor(max_workers=max_workers or config.max_workers) as pool:
             futures = {pool.submit(task_runner, job): job for job in job_list}
             for future in as_completed(futures):
                 job = futures[future]
                 try:
-                    result = future.result()
-                    logger.info(result)
+                    message, bytes_dl, state = future.result()
+                    if state == "skipped":
+                        summary["skipped"] += 1
+                    elif state == "processed":
+                        summary["processed"] += 1
+                    logger.info(message)
+                    update_overall(bytes_dl)
                 except Exception as exc:  # pragma: no cover
                     summary["failed"] += 1
                     logger.error("Failed %s: %s", job.entry.name, exc)
-                finally:
-                    progress.advance(overall)
+                    update_overall(0)
 
     return summary
 

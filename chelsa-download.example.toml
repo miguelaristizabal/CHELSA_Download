@@ -1,7 +1,7 @@
 [paths]
-aoi = "/path/to/aoi.geojson"
+aoi = "./AOI.geojson"
 lists_dir = "./lists"
-cache_dir = "./cache"
+cache_dir = "./chelsa_cache"
 trace_filelist_json = "./lists/raw/chelsatrace_filelist.json"
 
 [rclone]
