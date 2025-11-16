@@ -148,3 +148,18 @@ During downloads you’ll see a single progress bar with:
 - **Wrong files got clipped** – Confirm you regenerated the lists after changing remotes, and verify the AOI path (logged at start-up).
 
 With the bundled lists, default remotes, and AOI override, you can go from zero to clipped CHELSA rasters in a couple of commands—then fine-tune via the TOML whenever you need more control. Happy downloading!
+
+---
+
+### Releasing a new version on GitHub
+
+Once you are happy with the README and other polish, follow this checklist to publish a tagged release so users can pin to a stable artifact:
+
+1. **Freeze the code & docs.** Merge all desired changes into `main`/`work` and update `pyproject.toml`'s `version` field (e.g., bump from `0.1.0` to `0.2.0`). Commit the version bump with a message such as `chore: release v0.2.0`.
+2. **Run tests / smoke checks.** Execute `pytest` (and any manual CLI runs) to ensure the tag you are about to cut is green.
+3. **Tag the release locally.** `git tag -a v0.2.0 -m "CHELSA Download v0.2.0"`.
+4. **Push commits and tags.** `git push origin work && git push origin v0.2.0`.
+5. **Create a GitHub Release.** On the repository page, click **Releases → Draft a new release**, select the new tag, give it a title such as `CHELSA Download v0.2.0`, and paste release notes (highlights + breaking changes). Attach any helpful assets (e.g., sample TOML, generated lists) if desired.
+6. **Optional PyPI publish.** If you also distribute via PyPI, build and upload the wheel from the tagged commit: `python -m build && python -m twine upload dist/*`.
+
+Link the release back in the README once published so beginners can install via `pip install chelsa-download==0.2.0` or download the source archive directly from the release page.
