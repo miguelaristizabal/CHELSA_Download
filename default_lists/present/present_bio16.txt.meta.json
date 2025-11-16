@@ -1,0 +1,21 @@
+{
+  "kind": "present",
+  "variable": "bio16",
+  "files": [
+    {
+      "name": "CHELSA_bio16_1981-2010_V.2.1.tif",
+      "size": 584628073,
+      "time_id": null,
+      "path": "bio16/1981-2010/CHELSA_bio16_1981-2010_V.2.1.tif"
+    }
+  ],
+  "generated_at": "2025-11-15T03:47:42.703044",
+  "source": {
+    "type": "rclone"
+  },
+  "list_sha1": "91d17811eefda35a7b59cfc84c994affaa3a20b2",
+  "stats": {
+    "count": 1,
+    "date_range": "1981-2010"
+  }
+}
