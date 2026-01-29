@@ -17,7 +17,7 @@ from rich.progress import (
 from .config import GlobalConfig
 from .list_manager import ListFileEntry, ListManager, ListMetadata, parse_variable_from_listfilename
 from .processing import clip_scale_and_fill, load_aoi, write_raster
-from .rclone_helper import RcloneError, copy_to, list_remote
+from .rclone_helper import RcloneError, copy_to, list_remote, remote_to_http_url
 
 
 TRACE_REMOTE_SPECIAL_FOLDERS = {
@@ -236,7 +236,46 @@ def _process_one(job: DownloadJob, aoi, logger) -> str:
     return f"Processed {job.variable}:{job.entry.name}"
 
 
-def execute_jobs(jobs: Iterable[DownloadJob], config: GlobalConfig, logger, max_workers: Optional[int] = None) -> Dict[str, int]:
+def _process_remote(job: DownloadJob, aoi, logger, config: GlobalConfig) -> tuple[str, int, str]:
+    if job.output_path.exists() and not job.force:
+        return f"Skipped (exists): {job.output_path.name}", 0, "skipped"
+
+    url = remote_to_http_url(job.remote_path, config.rclone_config)
+    if not url:
+        logger.warning(
+            "Windowed read unavailable for %s (no HTTP mapping). Falling back to full download.",
+            job.remote_path,
+        )
+        status_msg, bytes_dl, skipped = _download_one(job, config)
+        if skipped:
+            return status_msg, bytes_dl, "skipped"
+        msg = _process_one(job, aoi, logger)
+        return msg, bytes_dl, "processed"
+
+    try:
+        clipped = clip_scale_and_fill(url, aoi, job.nodata)
+        write_raster(clipped, job.output_path)
+        return f"Processed (windowed) {job.variable}:{job.entry.name}", 0, "processed"
+    except Exception as exc:  # pragma: no cover - network/driver errors
+        logger.warning(
+            "Windowed read failed for %s (%s). Falling back to full download.",
+            job.entry.name,
+            exc,
+        )
+        status_msg, bytes_dl, skipped = _download_one(job, config)
+        if skipped:
+            return status_msg, bytes_dl, "skipped"
+        msg = _process_one(job, aoi, logger)
+        return msg, bytes_dl, "processed"
+
+
+def execute_jobs(
+    jobs: Iterable[DownloadJob],
+    config: GlobalConfig,
+    logger,
+    max_workers: Optional[int] = None,
+    windowed: bool = False,
+) -> Dict[str, int]:
     job_list = list(jobs)
     if not job_list:
         logger.warning("No jobs found. Ensure you ran `prepare-lists`.")
@@ -274,6 +313,8 @@ def execute_jobs(jobs: Iterable[DownloadJob], config: GlobalConfig, logger, max_
             )
 
         def task_runner(job: DownloadJob):
+            if windowed:
+                return _process_remote(job, aoi, logger, config)
             status_msg, bytes_dl, skipped = _download_one(job, config)
             if skipped:
                 return status_msg, bytes_dl, "skipped"

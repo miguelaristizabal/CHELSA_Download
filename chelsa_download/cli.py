@@ -116,11 +116,22 @@ def download_trace(
     limit: Optional[int] = typer.Option(None, "--limit", help="Process only the first N files."),
     force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
     max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
+    windowed: bool = typer.Option(
+        False,
+        "--windowed",
+        help="Attempt HTTP range-based reads to avoid full downloads (falls back to full).",
+    ),
 ):
     """Download and clip CHELSA-TraCE21k rasters."""
     context = _get_context(ctx)
     jobs = collect_trace_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
-    summary = execute_jobs(jobs, context.config, context.logger, max_workers=max_workers)
+    summary = execute_jobs(
+        jobs,
+        context.config,
+        context.logger,
+        max_workers=max_workers,
+        windowed=windowed,
+    )
     context.logger.info("Trace download summary: %s", summary)
 
 
@@ -131,9 +142,20 @@ def download_present(
     limit: Optional[int] = typer.Option(None, "--limit", help="Process only the first N files."),
     force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
     max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
+    windowed: bool = typer.Option(
+        False,
+        "--windowed",
+        help="Attempt HTTP range-based reads to avoid full downloads (falls back to full).",
+    ),
 ):
     """Download and clip CHELSA v2.1 present-day climatology."""
     context = _get_context(ctx)
     jobs = collect_present_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
-    summary = execute_jobs(jobs, context.config, context.logger, max_workers=max_workers)
+    summary = execute_jobs(
+        jobs,
+        context.config,
+        context.logger,
+        max_workers=max_workers,
+        windowed=windowed,
+    )
     context.logger.info("Present download summary: %s", summary)

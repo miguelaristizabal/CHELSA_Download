@@ -9,7 +9,7 @@ def _detect_version() -> str:
     try:
         return version("chelsa-download")
     except PackageNotFoundError:
-        return "0.1.0-dev"
+        return "0.2.4-dev"
 
 
 __version__ = _detect_version()

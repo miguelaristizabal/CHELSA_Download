@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Union
 
 import geopandas as gpd
 import numpy as np
@@ -30,8 +31,11 @@ def fill_mask(dataarray, nodata: float):
     return dataarray
 
 
-def clip_scale_and_fill(temp_path: Path, aoi_gdf: gpd.GeoDataFrame, nodata: float):
-    with rioxarray.open_rasterio(temp_path, masked=True) as rds:
+SourcePath = Union[str, Path]
+
+
+def clip_scale_and_fill(source: SourcePath, aoi_gdf: gpd.GeoDataFrame, nodata: float):
+    with rioxarray.open_rasterio(source, masked=True) as rds:
         clipped = rds.rio.clip(aoi_gdf.to_crs(rds.rio.crs).geometry, from_disk=True)
         if "band" in clipped.dims and clipped.sizes.get("band") == 1:
             clipped = clipped.squeeze("band", drop=True)

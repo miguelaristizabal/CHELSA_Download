@@ -35,9 +35,9 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 ```
   - Verify: `rclone version`
 
-#### 3) Install CHELSA_Download v0.2.3 from the GitHub tag tarball
+#### 3) Install CHELSA_Download v0.2.4 from the GitHub tag tarball
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.3.tar.gz"
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.4.tar.gz"
 ```
 #### 4) Run your first download (uses bundled lists and default remotes)
 ```bash
@@ -46,7 +46,7 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 
 This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory.
 
-To install a different version, replace `v0.2.3` in the URL with the tag you want.
+To install a different version, replace `v0.2.4` in the URL with the tag you want.
 
 #### Development install (from source)
 
@@ -171,6 +171,42 @@ During downloads you’ll see a single progress bar with:
 - Aggregate bytes downloaded (using list metadata)
 - Live download speed (averaged since the job started)
 - Elapsed and estimated remaining time
+
+---
+
+### Windowed (COG) reads (experimental)
+
+The CHELSA GeoTIFFs are cloud-optimized (tiled + overviews), which means GDAL can request only the needed byte ranges over HTTP when you clip to a small AOI. The CLI now supports an opt-in windowed mode that *skips full downloads* when a public HTTP mapping can be resolved for the rclone remote.
+
+Use the `--windowed` flag on either download command:
+
+```bash
+# Present-day, windowed HTTP reads (falls back to full download if needed)
+chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --windowed
+
+# TraCE21k, windowed HTTP reads
+chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 1 --windowed
+```
+
+Notes:
+- Windowed reads work automatically for the default CHELSA remotes (via `envicloud.conf`). If the remote can’t be mapped to a public URL, the CLI falls back to the original full-download path.
+- In windowed mode, cache files are not created because data is read directly from the remote COG.
+- Large AOIs may still read a lot of tiles; small AOIs see the biggest speedups.
+
+For verification and benchmarking, see:
+- `scripts/verify_cog_range.py`
+- `scripts/benchmark_windowed.py`
+
+#### Benchmark (run on January 29, 2026)
+
+Using `scripts/benchmark_windowed.py` with bounds `-10 35 10 45` (roughly a small AOI in WGS84):
+
+| Dataset | Remote file size | Window read time | Full download time | Time speedup |
+| --- | --- | --- | --- | --- |
+| Present (`CHELSA_bio01_1981-2010_V.2.1.tif`) | 145.2 MB | 2.63 s | 28.81 s | 11.0x |
+| TraCE21k (`CHELSA_TraCE21k_bio01_-200_V.1.0.tif`) | 121.5 MB | 1.82 s | 24.92 s | 13.7x |
+
+These numbers will vary by network, AOI size, and disk performance, but they demonstrate that the COG windowed path avoids full-file transfers.
 
 ---
 
