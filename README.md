@@ -35,18 +35,18 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 ```
   - Verify: `rclone version`
 
-#### 3) Install CHELSA_Download v0.2.4 from the GitHub tag tarball
+#### 3) Install CHELSA_Download v0.3.0 from the GitHub tag tarball
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.2.4.tar.gz"
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.3.0.tar.gz"
 ```
 #### 4) Run your first download (uses bundled lists and default remotes)
 ```bash
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
 
-This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory. By default, the CLI uses windowed COG reads (HTTP range requests) to avoid full downloads; use `--no-windowed` if you want full-file downloads and cache files.
+This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory. By default, the CLI uses windowed COG reads (HTTP range requests) to avoid full downloads and **normalizes all outputs to physical units** (no GeoTIFF scale/offset tags). Use `--no-windowed` for full downloads or `--no-unit-normalize` for raw debugging.
 
-To install a different version, replace `v0.2.4` in the URL with the tag you want.
+To install a different version, replace `v0.3.0` in the URL with the tag you want.
 
 #### Development install (from source)
 
@@ -76,7 +76,7 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ### Why this tool?
 
 - **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so you can run downloads immediately. If the included lists are out of date, regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
-- **AOI-centric downloads.** By default the CLI reads only the needed COG tiles over HTTP, clips to your AOI, fills masked cells with the declared nodata, and writes just the AOI raster. Use `--no-windowed` to force full downloads and cache files.
+- **AOI-centric downloads.** By default the CLI reads only the needed COG tiles over HTTP, clips to your AOI, fills masked cells with the declared nodata, and writes just the AOI raster in physical units (float32). Use `--no-windowed` to force full downloads and cache files.
 - **Resilient transfers.** rclone copy/retry logic is wrapped in a reusable helper. Cache files allow resuming long downloads without redownloading everything.
 - **Structured logging & progress.** A single Rich progress bar shows total files, cumulative download size, and live transfer speeds, while the logger records per-file results.
 
@@ -149,14 +149,14 @@ Expect a few minutes for the TraCE21k snapshot and less than a minute for the pr
 
 ### Downloading data
 
-Each download command consumes the list metadata, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. **By default, the CLI uses windowed HTTP reads against the COGs** (no full-file downloads). If the remote can’t be mapped to a public HTTP URL, it falls back to the original rclone download path. Use `--no-windowed` to force full downloads and cache files.
+Each download command consumes the list metadata, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. **By default, the CLI uses windowed HTTP reads against the COGs** (no full-file downloads) and **normalizes outputs to physical units** with no GeoTIFF scale/offset metadata. If the remote can’t be mapped to a public HTTP URL, it falls back to the original rclone download path. Use `--no-windowed` to force full downloads and cache files, or `--no-unit-normalize` for raw debugging.
 
 All commands honor global flags such as `--quiet/--verbose`, `--limit`, `--var`, `--force`, `--max-workers`, and `--no-windowed`.
 
 | Command | Purpose | Common flags | Typical use | More info |
 | --- | --- | --- | --- | --- |
-| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6`, `--no-windowed` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
-| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4`, `--no-windowed` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
+| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6`, `--no-windowed`, `--no-unit-normalize` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
+| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4`, `--no-windowed`, `--no-unit-normalize` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
 
 Example:
 
@@ -169,6 +169,9 @@ chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 10
 
 # Force full downloads + caching
 chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-windowed
+
+# Disable unit normalization (debug only)
+chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-unit-normalize
 ```
 
 During downloads you’ll see a single progress bar with:
@@ -176,6 +179,29 @@ During downloads you’ll see a single progress bar with:
 - Aggregate bytes downloaded (using list metadata)
 - Live download speed (averaged since the job started)
 - Elapsed and estimated remaining time
+
+---
+
+### Units & normalization (default)
+
+All outputs are written as float32 in physical units with **no GeoTIFF scale/offset metadata**. This ensures that present-day and TraCE21k rasters are directly interoperable.
+
+**Units by variable group:**
+
+| Variable group | Output units | Notes |
+| --- | --- | --- |
+| bio01, bio05, bio06, bio08, bio09, bio10, bio11 | degC | Absolute temperatures |
+| bio02, bio07 | degC | `quantity=temperature_range` |
+| bio04 | degC | `quantity=temperature_stdev` |
+| bio03 | % | `quantity=isothermality` (computed as `100 * bio02 / bio07`) |
+| bio12 | kg m-2 year-1 | Annual precipitation |
+| bio13–bio19 | kg m-2 month-1 | Monthly/seasonal precipitation |
+
+Derived variables are recomputed whenever dependencies are requested:
+- `bio07 = bio05 - bio06` (degC)
+- `bio03 = 100 * (bio02 / bio07)` (%)
+
+Use `--no-unit-normalize` only for debugging; it disables these conversions.
 
 ---
 
@@ -197,6 +223,7 @@ Notes:
 - Windowed reads work automatically for the default CHELSA remotes (via `envicloud.conf`). If the remote can’t be mapped to a public URL, the CLI falls back to the original full-download path.
 - In windowed mode, cache files are not created because data is read directly from the remote COG.
 - Large AOIs may still read a lot of tiles; small AOIs see the biggest speedups.
+- Unit normalization is always applied unless you pass `--no-unit-normalize`.
 
 For verification and benchmarking, see:
 - `scripts/verify_cog_range.py`

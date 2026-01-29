@@ -34,19 +34,16 @@ def fill_mask(dataarray, nodata: float):
 SourcePath = Union[str, Path]
 
 
-def clip_scale_and_fill(source: SourcePath, aoi_gdf: gpd.GeoDataFrame, nodata: float):
+def clip_raster(source: SourcePath, aoi_gdf: gpd.GeoDataFrame):
+    """Clip a raster to the AOI without applying scale/offset metadata."""
     with rioxarray.open_rasterio(source, masked=True) as rds:
         clipped = rds.rio.clip(aoi_gdf.to_crs(rds.rio.crs).geometry, from_disk=True)
         if "band" in clipped.dims and clipped.sizes.get("band") == 1:
             clipped = clipped.squeeze("band", drop=True)
-        clipped = fill_mask(clipped, nodata)
-        clipped = clipped.fillna(nodata)
-        clipped = clipped.astype("float32")
-        clipped.rio.write_nodata(nodata, inplace=True)
         return clipped
 
 
-def write_raster(dataarray, destination: Path):
+def write_raster(dataarray, destination: Path, tags: dict | None = None):
     dataarray.rio.to_raster(
         destination,
         dtype="float32",
@@ -57,3 +54,8 @@ def write_raster(dataarray, destination: Path):
         BIGTIFF="IF_NEEDED",
         windowed=True,
     )
+    if tags:
+        import rasterio
+
+        with rasterio.open(destination, "r+") as ds:
+            ds.update_tags(**tags)

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+
+import numpy as np
 
 from rich.progress import (
     BarColumn,
@@ -16,8 +19,9 @@ from rich.progress import (
 
 from .config import GlobalConfig
 from .list_manager import ListFileEntry, ListManager, ListMetadata, parse_variable_from_listfilename
-from .processing import clip_scale_and_fill, load_aoi, write_raster
+from .processing import clip_raster, load_aoi, write_raster
 from .rclone_helper import RcloneError, copy_to, list_remote, remote_to_http_url
+from .units import NORMALIZATION_VERSION, NormalizationContext, normalize_units, recompute_bio03, recompute_bio07
 
 
 TRACE_REMOTE_SPECIAL_FOLDERS = {
@@ -228,15 +232,21 @@ def _download_one(job: DownloadJob, config: GlobalConfig) -> tuple[str, int, boo
     return "downloaded", size_on_disk, False
 
 
-def _process_one(job: DownloadJob, aoi, logger) -> str:
-    clipped = clip_scale_and_fill(job.temp_path, aoi, job.nodata)
-    clipped_path = job.output_path
-    write_raster(clipped, clipped_path)
+def _process_one(job: DownloadJob, aoi, logger, context: NormalizationContext) -> str:
+    clipped = clip_raster(job.temp_path, aoi)
+    normalized, tags = normalize_units(job.kind, job.variable, clipped, job.nodata, logger, context)
+    write_raster(normalized, job.output_path, tags=tags)
     job.temp_path.unlink(missing_ok=True)
     return f"Processed {job.variable}:{job.entry.name}"
 
 
-def _process_remote(job: DownloadJob, aoi, logger, config: GlobalConfig) -> tuple[str, int, str]:
+def _process_remote(
+    job: DownloadJob,
+    aoi,
+    logger,
+    config: GlobalConfig,
+    context: NormalizationContext,
+) -> tuple[str, int, str]:
     if job.output_path.exists() and not job.force:
         return f"Skipped (exists): {job.output_path.name}", 0, "skipped"
 
@@ -249,12 +259,13 @@ def _process_remote(job: DownloadJob, aoi, logger, config: GlobalConfig) -> tupl
         status_msg, bytes_dl, skipped = _download_one(job, config)
         if skipped:
             return status_msg, bytes_dl, "skipped"
-        msg = _process_one(job, aoi, logger)
+        msg = _process_one(job, aoi, logger, context)
         return msg, bytes_dl, "processed"
 
     try:
-        clipped = clip_scale_and_fill(url, aoi, job.nodata)
-        write_raster(clipped, job.output_path)
+        clipped = clip_raster(url, aoi)
+        normalized, tags = normalize_units(job.kind, job.variable, clipped, job.nodata, logger, context)
+        write_raster(normalized, job.output_path, tags=tags)
         return f"Processed (windowed) {job.variable}:{job.entry.name}", 0, "processed"
     except Exception as exc:  # pragma: no cover - network/driver errors
         logger.warning(
@@ -265,7 +276,7 @@ def _process_remote(job: DownloadJob, aoi, logger, config: GlobalConfig) -> tupl
         status_msg, bytes_dl, skipped = _download_one(job, config)
         if skipped:
             return status_msg, bytes_dl, "skipped"
-        msg = _process_one(job, aoi, logger)
+        msg = _process_one(job, aoi, logger, context)
         return msg, bytes_dl, "processed"
 
 
@@ -275,6 +286,7 @@ def execute_jobs(
     logger,
     max_workers: Optional[int] = None,
     windowed: bool = False,
+    unit_normalize: bool = True,
 ) -> Dict[str, int]:
     job_list = list(jobs)
     if not job_list:
@@ -285,6 +297,15 @@ def execute_jobs(
     cache_dir.mkdir(parents=True, exist_ok=True)
     aoi = load_aoi(Path(config.aoi_path))
     summary = {"processed": 0, "skipped": 0, "failed": 0}
+
+    requested_vars = {job.variable.lower() for job in job_list}
+    recompute_bio07 = {"bio05", "bio06", "bio07"}.issubset(requested_vars)
+    recompute_bio03 = {"bio02", "bio07", "bio03"}.issubset(requested_vars)
+    normalization_context = NormalizationContext(
+        unit_normalize=unit_normalize,
+        recompute_bio07=recompute_bio07,
+        recompute_bio03=recompute_bio03,
+    )
 
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
@@ -314,11 +335,11 @@ def execute_jobs(
 
         def task_runner(job: DownloadJob):
             if windowed:
-                return _process_remote(job, aoi, logger, config)
+                return _process_remote(job, aoi, logger, config, normalization_context)
             status_msg, bytes_dl, skipped = _download_one(job, config)
             if skipped:
                 return status_msg, bytes_dl, "skipped"
-            msg = _process_one(job, aoi, logger)
+            msg = _process_one(job, aoi, logger, normalization_context)
             return msg, bytes_dl, "processed"
 
         with ThreadPoolExecutor(max_workers=max_workers or config.max_workers) as pool:
@@ -338,7 +359,111 @@ def execute_jobs(
                     logger.error("Failed %s: %s", job.entry.name, exc)
                     update_overall(0)
 
+    if unit_normalize:
+        _recompute_derived_outputs(job_list, config, logger, recompute_bio07, recompute_bio03)
+
     return summary
+
+
+def _replace_bio_var(filename: str, new_var: str) -> str:
+    return re.sub(r"(bio\d{1,2})", new_var, filename, count=1, flags=re.IGNORECASE)
+
+
+def _dependency_output_path(job: DownloadJob, dep_var: str, config: GlobalConfig) -> Path:
+    filename = _replace_bio_var(job.entry.name, dep_var).replace(".tif", "_AOI.tif")
+    if job.kind == "trace":
+        out_dir = Path(config.trace.output_dir) / dep_var
+    else:
+        out_dir = Path(config.present.output_dir) / present_remote_subdir(dep_var)
+    return out_dir / filename
+
+
+def _read_output_array(path: Path):
+    import rioxarray  # type: ignore
+
+    with rioxarray.open_rasterio(path, masked=True) as rds:
+        data = rds.squeeze("band", drop=True)
+        return data
+
+
+def _array_from_dataarray(dataarray, nodata_value: float):
+    data = dataarray.data
+    if np.ma.isMaskedArray(data):
+        arr = np.ma.filled(data, nodata_value).astype("float32")
+    else:
+        arr = np.asarray(data).astype("float32")
+    if np.issubdtype(arr.dtype, np.floating):
+        arr = np.where(np.isnan(arr), nodata_value, arr)
+    return arr
+
+
+def _clear_scale_offset_attrs(dataarray) -> None:
+    for key in ("scale_factor", "add_offset", "scale", "offset"):
+        dataarray.attrs.pop(key, None)
+        if hasattr(dataarray, "encoding"):
+            dataarray.encoding.pop(key, None)
+
+
+def _recompute_derived_outputs(
+    jobs: Iterable[DownloadJob],
+    config: GlobalConfig,
+    logger,
+    recompute_bio07: bool,
+    recompute_bio03: bool,
+) -> None:
+    jobs_by_var: Dict[str, List[DownloadJob]] = {}
+    for job in jobs:
+        jobs_by_var.setdefault(job.variable.lower(), []).append(job)
+
+    if recompute_bio07:
+        for job in jobs_by_var.get("bio07", []):
+            dep05 = _dependency_output_path(job, "bio05", config)
+            dep06 = _dependency_output_path(job, "bio06", config)
+            if not dep05.exists() or not dep06.exists():
+                logger.warning("Skipping recompute for %s; missing bio05/bio06 outputs.", job.output_path.name)
+                continue
+            bio05 = _read_output_array(dep05)
+            bio06 = _read_output_array(dep06)
+            arr05 = _array_from_dataarray(bio05, job.nodata)
+            arr06 = _array_from_dataarray(bio06, job.nodata)
+            result = recompute_bio07(arr05, arr06, job.nodata, logger)
+            out_da = bio05.copy(deep=True)
+            out_da.data = result
+            out_da.rio.write_nodata(job.nodata, inplace=True)
+            _clear_scale_offset_attrs(out_da)
+            tags = {
+                "units": "degC",
+                "quantity": "temperature_range",
+                "unit_normalized": "true",
+                "unit_normalization_version": NORMALIZATION_VERSION,
+            }
+            write_raster(out_da, job.output_path, tags=tags)
+            logger.info("Recomputed bio07 from bio05/bio06: %s", job.output_path.name)
+
+    if recompute_bio03:
+        for job in jobs_by_var.get("bio03", []):
+            dep02 = _dependency_output_path(job, "bio02", config)
+            dep07 = _dependency_output_path(job, "bio07", config)
+            if not dep02.exists() or not dep07.exists():
+                logger.warning("Skipping recompute for %s; missing bio02/bio07 outputs.", job.output_path.name)
+                continue
+            bio02 = _read_output_array(dep02)
+            bio07 = _read_output_array(dep07)
+            arr02 = _array_from_dataarray(bio02, job.nodata)
+            arr07 = _array_from_dataarray(bio07, job.nodata)
+            result = recompute_bio03(arr02, arr07, job.nodata, logger)
+            out_da = bio02.copy(deep=True)
+            out_da.data = result
+            out_da.rio.write_nodata(job.nodata, inplace=True)
+            _clear_scale_offset_attrs(out_da)
+            tags = {
+                "units": "%",
+                "quantity": "isothermality",
+                "unit_normalized": "true",
+                "unit_normalization_version": NORMALIZATION_VERSION,
+            }
+            write_raster(out_da, job.output_path, tags=tags)
+            logger.info("Recomputed bio03 from bio02/bio07: %s", job.output_path.name)
 
 
 def prepare_present_listing(config: GlobalConfig, logger) -> List[Dict[str, object]]:

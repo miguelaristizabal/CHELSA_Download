@@ -121,6 +121,11 @@ def download_trace(
         "--windowed/--no-windowed",
         help="Use HTTP range-based reads by default (falls back to full if needed).",
     ),
+    unit_normalize: bool = typer.Option(
+        True,
+        "--unit-normalize/--no-unit-normalize",
+        help="Normalize outputs to physical units (disable only for debugging).",
+    ),
 ):
     """Download and clip CHELSA-TraCE21k rasters."""
     context = _get_context(ctx)
@@ -131,6 +136,7 @@ def download_trace(
         context.logger,
         max_workers=max_workers,
         windowed=windowed,
+        unit_normalize=unit_normalize,
     )
     context.logger.info("Trace download summary: %s", summary)
 
@@ -147,6 +153,11 @@ def download_present(
         "--windowed/--no-windowed",
         help="Use HTTP range-based reads by default (falls back to full if needed).",
     ),
+    unit_normalize: bool = typer.Option(
+        True,
+        "--unit-normalize/--no-unit-normalize",
+        help="Normalize outputs to physical units (disable only for debugging).",
+    ),
 ):
     """Download and clip CHELSA v2.1 present-day climatology."""
     context = _get_context(ctx)
@@ -157,5 +168,6 @@ def download_present(
         context.logger,
         max_workers=max_workers,
         windowed=windowed,
+        unit_normalize=unit_normalize,
     )
     context.logger.info("Present download summary: %s", summary)
