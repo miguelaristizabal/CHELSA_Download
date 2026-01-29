@@ -44,7 +44,7 @@ python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/arch
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
 
-This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory.
+This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory. By default, the CLI uses windowed COG reads (HTTP range requests) to avoid full downloads; use `--no-windowed` if you want full-file downloads and cache files.
 
 To install a different version, replace `v0.2.4` in the URL with the tag you want.
 
@@ -76,7 +76,7 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ### Why this tool?
 
 - **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so you can run downloads immediately. If the included lists are out of date, regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
-- **AOI-centric downloads.** Files land in a cache, get clipped to your AOI, masked cells are filled with the declared nodata, and only the AOI raster is written.
+- **AOI-centric downloads.** By default the CLI reads only the needed COG tiles over HTTP, clips to your AOI, fills masked cells with the declared nodata, and writes just the AOI raster. Use `--no-windowed` to force full downloads and cache files.
 - **Resilient transfers.** rclone copy/retry logic is wrapped in a reusable helper. Cache files allow resuming long downloads without redownloading everything.
 - **Structured logging & progress.** A single Rich progress bar shows total files, cumulative download size, and live transfer speeds, while the logger records per-file results.
 
@@ -149,12 +149,14 @@ Expect a few minutes for the TraCE21k snapshot and less than a minute for the pr
 
 ### Downloading data
 
-Each download command consumes the list metadata, pulls the needed files via rclone, writes them to the cache, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. All commands honor global flags such as `--quiet/--verbose`, `--limit`, `--var`, `--force`, and `--max-workers`.
+Each download command consumes the list metadata, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. **By default, the CLI uses windowed HTTP reads against the COGs** (no full-file downloads). If the remote can’t be mapped to a public HTTP URL, it falls back to the original rclone download path. Use `--no-windowed` to force full downloads and cache files.
+
+All commands honor global flags such as `--quiet/--verbose`, `--limit`, `--var`, `--force`, `--max-workers`, and `--no-windowed`.
 
 | Command | Purpose | Common flags | Typical use | More info |
 | --- | --- | --- | --- | --- |
-| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
-| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
+| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6`, `--no-windowed` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
+| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4`, `--no-windowed` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
 
 Example:
 
@@ -164,6 +166,9 @@ chelsa-download --aoi data/my_aoi.geojson download-present --max-workers 4
 
 # TraCE subset with limited files for testing
 chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 10
+
+# Force full downloads + caching
+chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-windowed
 ```
 
 During downloads you’ll see a single progress bar with:
@@ -174,18 +179,18 @@ During downloads you’ll see a single progress bar with:
 
 ---
 
-### Windowed (COG) reads (experimental)
+### Windowed (COG) reads (default)
 
-The CHELSA GeoTIFFs are cloud-optimized (tiled + overviews), which means GDAL can request only the needed byte ranges over HTTP when you clip to a small AOI. The CLI now supports an opt-in windowed mode that *skips full downloads* when a public HTTP mapping can be resolved for the rclone remote.
+The CHELSA GeoTIFFs are cloud-optimized (tiled + overviews), which means GDAL can request only the needed byte ranges over HTTP when you clip to a small AOI. The CLI uses this windowed mode by default, which *skips full downloads* when a public HTTP mapping can be resolved for the rclone remote.
 
-Use the `--windowed` flag on either download command:
+Use `--no-windowed` if you need the original full-download behavior:
 
 ```bash
-# Present-day, windowed HTTP reads (falls back to full download if needed)
-chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --windowed
+# Present-day, force full download + cache
+chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-windowed
 
-# TraCE21k, windowed HTTP reads
-chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 1 --windowed
+# TraCE21k, force full download + cache
+chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 1 --no-windowed
 ```
 
 Notes:
@@ -212,7 +217,7 @@ These numbers will vary by network, AOI size, and disk performance, but they dem
 
 ### Tips for large pulls
 
-- **Cache sizing:** Keep `./chelsa_cache` on an SSD with at least a few GB free; each raw TIFF can be 0.5–2 GB.
+- **Cache sizing:** If using `--no-windowed`, keep `./chelsa_cache` on an SSD with at least a few GB free; each raw TIFF can be 0.5–2 GB.
 - **Parallelism:** Tune `--max-workers` (or `downloads.max_workers`) to match your network/storage throughput.
 - **List freshness:** If the CHELSA bucket changes, rerun the `prepare-lists` commands so metadata hashes match the `.txt` files.
 - **AOI CRS:** If your AOI lacks a CRS the tool assumes WGS84 (EPSG:4326). Set it explicitly in your GIS before running downloads.

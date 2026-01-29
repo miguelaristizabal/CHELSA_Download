@@ -117,9 +117,9 @@ def download_trace(
     force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
     max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
     windowed: bool = typer.Option(
-        False,
-        "--windowed",
-        help="Attempt HTTP range-based reads to avoid full downloads (falls back to full).",
+        True,
+        "--windowed/--no-windowed",
+        help="Use HTTP range-based reads by default (falls back to full if needed).",
     ),
 ):
     """Download and clip CHELSA-TraCE21k rasters."""
@@ -143,9 +143,9 @@ def download_present(
     force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
     max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
     windowed: bool = typer.Option(
-        False,
-        "--windowed",
-        help="Attempt HTTP range-based reads to avoid full downloads (falls back to full).",
+        True,
+        "--windowed/--no-windowed",
+        help="Use HTTP range-based reads by default (falls back to full if needed).",
     ),
 ):
     """Download and clip CHELSA v2.1 present-day climatology."""
