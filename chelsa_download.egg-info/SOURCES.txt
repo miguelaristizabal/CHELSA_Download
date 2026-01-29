@@ -11,6 +11,7 @@ chelsa_download/list_manager.py
 chelsa_download/logging_utils.py
 chelsa_download/processing.py
 chelsa_download/rclone_helper.py
+chelsa_download/units.py
 chelsa_download.egg-info/PKG-INFO
 chelsa_download.egg-info/SOURCES.txt
 chelsa_download.egg-info/dependency_links.txt
@@ -107,3 +108,4 @@ chelsa_download/data/lists/raw/chelsatrace_filelist.json
 tests/test_lists.py
 tests/test_processing.py
 tests/test_rclone_helper.py
+tests/test_units.py

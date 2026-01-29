@@ -299,12 +299,12 @@ def execute_jobs(
     summary = {"processed": 0, "skipped": 0, "failed": 0}
 
     requested_vars = {job.variable.lower() for job in job_list}
-    recompute_bio07 = {"bio05", "bio06", "bio07"}.issubset(requested_vars)
-    recompute_bio03 = {"bio02", "bio07", "bio03"}.issubset(requested_vars)
+    recompute_bio07_flag = {"bio05", "bio06", "bio07"}.issubset(requested_vars)
+    recompute_bio03_flag = {"bio02", "bio07", "bio03"}.issubset(requested_vars)
     normalization_context = NormalizationContext(
         unit_normalize=unit_normalize,
-        recompute_bio07=recompute_bio07,
-        recompute_bio03=recompute_bio03,
+        recompute_bio07=recompute_bio07_flag,
+        recompute_bio03=recompute_bio03_flag,
     )
 
     progress = Progress(
@@ -360,7 +360,7 @@ def execute_jobs(
                     update_overall(0)
 
     if unit_normalize:
-        _recompute_derived_outputs(job_list, config, logger, recompute_bio07, recompute_bio03)
+        _recompute_derived_outputs(job_list, config, logger, recompute_bio07_flag, recompute_bio03_flag)
 
     return summary
 
