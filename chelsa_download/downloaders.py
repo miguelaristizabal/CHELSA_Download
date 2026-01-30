@@ -12,6 +12,7 @@ import numpy as np
 from rich.progress import (
     BarColumn,
     Progress,
+    SpinnerColumn,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -308,59 +309,48 @@ def execute_jobs(
     )
 
     progress = Progress(
+        SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
-        TextColumn("{task.completed}/{task.total}"),
-        TextColumn("{task.fields[status]}"),
+        TextColumn("{task.completed}/{task.total} files"),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
     )
 
     with progress:
-        overall = progress.add_task("total", total=len(job_list), status="starting")
+        overall = progress.add_task("[bold green]Starting downloads...", total=len(job_list))
         total_bytes = 0
         start_time = time.time()
 
-        def update_overall(extra_bytes: int):
+        def update_overall(extra_bytes: int, last_item: str):
             nonlocal total_bytes
             total_bytes += max(extra_bytes, 0)
             elapsed = max(time.time() - start_time, 0.001)
             speed_val = total_bytes / elapsed
+            
             if windowed:
-                status = "windowed"
+                desc = f"[bold green]Downloading...[/] [dim]Latest: {last_item}[/]"
             else:
-                status = f"{_human_bytes(total_bytes)} @ {_human_speed(speed_val)}"
+                desc = f"[bold green]Downloading... ({_human_speed(speed_val)})[/] [dim]Latest: {last_item}[/]"
             progress.update(
                 overall,
                 advance=1,
-                status=status,
+                description=desc,
             )
 
-        job_tasks: Dict[int, int] = {}
-        for job in job_list:
-            job_tasks[id(job)] = progress.add_task(
-                f"{job.variable}:{job.entry.name}",
-                total=1,
-                status="queued",
-            )
-
-        def task_runner(job: DownloadJob, task_id: int):
-            progress.update(task_id, status="running")
+        def task_runner(job: DownloadJob):
             if windowed:
                 message, bytes_dl, state = _process_remote(job, aoi, logger, config, normalization_context)
-                progress.update(task_id, advance=1, status=state)
                 return message, bytes_dl, state
             status_msg, bytes_dl, skipped = _download_one(job, config)
             if skipped:
-                progress.update(task_id, advance=1, status="skipped")
                 return status_msg, bytes_dl, "skipped"
             msg = _process_one(job, aoi, logger, normalization_context)
-            progress.update(task_id, advance=1, status="processed")
             return msg, bytes_dl, "processed"
 
         with ThreadPoolExecutor(max_workers=max_workers or config.max_workers) as pool:
             futures = {
-                pool.submit(task_runner, job, job_tasks[id(job)]): job
+                pool.submit(task_runner, job): job
                 for job in job_list
             }
             for future in as_completed(futures):
@@ -371,14 +361,13 @@ def execute_jobs(
                         summary["skipped"] += 1
                     elif state == "processed":
                         summary["processed"] += 1
-                    logger.info(message)
-                    update_overall(bytes_dl)
+                    
+                    update_overall(bytes_dl, job.entry.name)
                 except Exception as exc:  # pragma: no cover
                     summary["failed"] += 1
                     logger.error("Failed %s: %s", job.entry.name, exc)
-                    task_id = job_tasks[id(job)]
-                    progress.update(task_id, advance=1, status="failed")
-                    update_overall(0)
+                    progress.console.print(f"[red]Failed {job.entry.name}: {exc}[/]")
+                    update_overall(0, f"[red]FAILED {job.entry.name}[/]")
 
     if unit_normalize:
         _recompute_derived_outputs(job_list, config, logger, recompute_bio07_flag, recompute_bio03_flag)

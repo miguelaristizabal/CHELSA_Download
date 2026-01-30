@@ -59,6 +59,8 @@ def write_raster(dataarray, destination: Path, tags: dict | None = None):
         blockysize=256,
         BIGTIFF="IF_NEEDED",
         windowed=True,
+        predictor=2,
+        num_threads="ALL_CPUS",
     )
     if tags:
         import rasterio

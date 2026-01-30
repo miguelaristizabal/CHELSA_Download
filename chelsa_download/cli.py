@@ -5,7 +5,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
+import os
 import typer
+from rich import box
+from rich.console import Console
+from rich.table import Table
+
+# --- GDAL Performance Tuning ---
+# These must be set before rasterio/gdal is heavily used.
+# 1. EMPTY_DIR prevents GDAL from trying to list the remote directory (slow/404s on HTTP).
+os.environ["GDAL_DISABLE_READDIR_ON_OPEN"] = "EMPTY_DIR"
+# 2. Merge range requests to reduce the number of HTTP round-trips.
+os.environ["GDAL_HTTP_MERGE_CONSECUTIVE_RANGES"] = "YES"
+os.environ["GDAL_HTTP_MULTIPLEX"] = "YES"
+os.environ["CPL_VSIL_CURL_ALLOWED_EXTENSIONS"] = ".tif,.TIF"
+# 3. Increase buffer for fewer requests on high-latency connections (512KB -> 1MB)
+os.environ["CPL_VSIL_CURL_CHUNK_SIZE"] = "1048576" 
 
 from .config import GlobalConfig
 from .downloaders import (
@@ -13,6 +28,7 @@ from .downloaders import (
     collect_trace_jobs,
     execute_jobs,
     prepare_present_listing,
+    DownloadJob,
 )
 from .list_manager import ListManager
 from .logging_utils import setup_logging
@@ -31,6 +47,38 @@ def _get_context(ctx: typer.Context) -> AppContext:
     if ctx.obj is None:
         raise typer.BadParameter("CLI context not initialized.")
     return ctx.obj
+
+
+def _print_plan(context: AppContext, jobs: List[DownloadJob], windowed: bool, unit_normalize: bool):
+    """Print a pretty summary of the download plan."""
+    from collections import Counter
+    console = Console()
+    
+    # Configuration Summary
+    grid = Table.grid(expand=True, padding=(0, 2))
+    grid.add_column(style="bold cyan", justify="right")
+    grid.add_column()
+    
+    grid.add_row("AOI:", str(context.config.aoi_path))
+    grid.add_row("Output Root:", str(context.config.present.output_dir.parent))
+    grid.add_row("Mode:", "Windowed (AOI Clip)" if windowed else "Full Download")
+    grid.add_row("Normalization:", "Enabled (Physical Units)" if unit_normalize else "Disabled (Raw Values)")
+    
+    console.print()
+    console.print(grid)
+    console.print()
+
+    # Variable Summary
+    counts = Counter(j.variable for j in jobs)
+    table = Table(title=f"Download Plan ({len(jobs)} files)", box=box.SIMPLE)
+    table.add_column("Variable", style="magenta")
+    table.add_column("Count", justify="right", style="green")
+    
+    for var, count in sorted(counts.items()):
+        table.add_row(var, str(count))
+        
+    console.print(table)
+    console.print()
 
 
 @app.callback()
@@ -130,6 +178,7 @@ def download_trace(
     """Download and clip CHELSA-TraCE21k rasters."""
     context = _get_context(ctx)
     jobs = collect_trace_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
+    _print_plan(context, jobs, windowed, unit_normalize)
     summary = execute_jobs(
         jobs,
         context.config,
@@ -162,6 +211,7 @@ def download_present(
     """Download and clip CHELSA v2.1 present-day climatology."""
     context = _get_context(ctx)
     jobs = collect_present_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
+    _print_plan(context, jobs, windowed, unit_normalize)
     summary = execute_jobs(
         jobs,
         context.config,
