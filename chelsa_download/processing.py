@@ -44,12 +44,18 @@ def clip_raster(source: SourcePath, aoi_gdf: gpd.GeoDataFrame):
 
 
 def write_raster(dataarray, destination: Path, tags: dict | None = None):
-    # Avoid conflicts between attrs and encoding (xarray _FillValue handling).
+    """Write a DataArray to a GeoTIFF, preserving nodata and removing scale/offset."""
     dataarray = dataarray.copy(deep=False)
-    for key in ("_FillValue", "scale_factor", "add_offset", "scale", "offset"):
+    
+    # Preserve the nodata value before clearing any metadata
+    nodata = dataarray.rio.nodata
+    
+    # Clear scale/offset but NOT _FillValue (it stores nodata)
+    for key in ("scale_factor", "add_offset", "scale", "offset"):
         dataarray.attrs.pop(key, None)
         if hasattr(dataarray, "encoding"):
             dataarray.encoding.pop(key, None)
+    
     dataarray.rio.to_raster(
         destination,
         dtype="float32",
@@ -61,6 +67,7 @@ def write_raster(dataarray, destination: Path, tags: dict | None = None):
         windowed=True,
         predictor=2,
         num_threads="ALL_CPUS",
+        nodata=nodata,
     )
     if tags:
         import rasterio

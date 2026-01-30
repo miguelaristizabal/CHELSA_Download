@@ -88,16 +88,21 @@ def main(
         None,
         "--config",
         "-c",
-        help="Path to chelsa-download TOML configuration file.",
+        help="Path to a TOML configuration file. If not provided, bundled defaults will be used. See chelsa-download.example.toml for reference.",
         envvar="CHELSA_DOWNLOAD_CONFIG",
     ),
     aoi: Optional[Path] = typer.Option(
         None,
         "--aoi",
-        help="Path to the AOI file. Required if no config file is available.",
+        help="Path to your Area of Interest (AOI) file (GeoJSON, Shapefile, etc.). This defines the geographic region to download. Required when no config file is provided.",
     ),
-    quiet: bool = typer.Option(False, "--quiet", help="Only log warnings and errors."),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable debug logging."),
+    max_workers: Optional[int] = typer.Option(
+        None,
+        "--max-workers",
+        help="Number of parallel download/processing workers. Higher values speed up downloads but increase memory usage. Default is 6 (or value from config).",
+    ),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress informational messages. Only warnings and errors will be shown."),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable detailed debug logging for troubleshooting."),
 ):
     logger = setup_logging(verbose=verbose, quiet=quiet)
     cfg: GlobalConfig
@@ -116,6 +121,12 @@ def main(
             chosen_aoi = Path(prompt_value)
         cfg = GlobalConfig.default(chosen_aoi.expanduser().resolve())
         logger.info("Using bundled defaults (lists: %s, outputs: %s)", cfg.lists_dir, cfg.present.output_dir.parent)
+    
+    # Override max_workers if provided
+    if max_workers is not None:
+        cfg.max_workers = max_workers
+        logger.debug("Overriding max_workers to %d", max_workers)
+    
     ctx.obj = AppContext(cfg, logger, ListManager(cfg))
     logger.debug("Loaded configuration: %s", cfg.to_dict())
 
@@ -123,14 +134,14 @@ def main(
 @app.command("prepare-lists")
 def prepare_lists(
     ctx: typer.Context,
-    kind: str = typer.Option(..., "--kind", "-k", help="List kind to prepare (trace or present)."),
+    kind: str = typer.Option(..., "--kind", "-k", help="Type of file lists to generate: 'trace' for TraCE21k paleoclimate data, or 'present' for modern (1981-2010) climatology."),
     source_json: Optional[Path] = typer.Option(
         None,
         "--source-json",
-        help="Path to cached lsjson output for TraCE21k (defaults to paths.trace_filelist_json).",
+        help="Path to a pre-cached rclone lsjson output file for TraCE21k data. Only used with --kind trace. If not provided, uses the path from your config file.",
     ),
 ):
-    """Generate text lists and metadata for later downloads."""
+    """Generate file lists and metadata needed for downloads. Run this once before downloading if not using bundled lists."""
     context = _get_context(ctx)
     manager = context.manager
     cfg = context.config
@@ -160,22 +171,22 @@ def prepare_lists(
 @app.command("download-trace")
 def download_trace(
     ctx: typer.Context,
-    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter to one or more variables."),
-    limit: Optional[int] = typer.Option(None, "--limit", help="Process only the first N files."),
-    force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
-    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
+    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter downloads to specific variables (e.g., --var bio01 --var bio12). Can be specified multiple times. If omitted, all available variables are downloaded."),
+    limit: Optional[int] = typer.Option(None, "--limit", help="Limit processing to the first N files (useful for testing). If not specified, all matching files will be processed."),
+    force: bool = typer.Option(False, "--force", help="Force re-download and overwrite existing output files, even if they already exist."),
+    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Number of parallel workers for this specific command. Overrides global --max-workers and config file settings."),
     windowed: bool = typer.Option(
         True,
         "--windowed/--no-windowed",
-        help="Use HTTP range-based reads by default (falls back to full if needed).",
+        help="Use windowed (HTTP range-based) reads to only download pixels within your AOI. Faster and saves bandwidth. Use --no-windowed to download full files.",
     ),
     unit_normalize: bool = typer.Option(
         True,
         "--unit-normalize/--no-unit-normalize",
-        help="Normalize outputs to physical units (disable only for debugging).",
+        help="Convert output values to physical units (°C, mm, etc.) by applying scale/offset. Use --no-unit-normalize only for debugging raw GeoTIFF values.",
     ),
 ):
-    """Download and clip CHELSA-TraCE21k rasters."""
+    """Download and clip CHELSA-TraCE21k paleoclimate rasters for your AOI."""
     context = _get_context(ctx)
     jobs = collect_trace_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
     _print_plan(context, jobs, windowed, unit_normalize)
@@ -193,22 +204,22 @@ def download_trace(
 @app.command("download-present")
 def download_present(
     ctx: typer.Context,
-    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter to variables (e.g., bio01)."),
-    limit: Optional[int] = typer.Option(None, "--limit", help="Process only the first N files."),
-    force: bool = typer.Option(False, "--force", help="Re-download and overwrite outputs."),
-    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Override configured worker count."),
+    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter downloads to specific bioclim variables (e.g., --var bio01 --var bio12). Can be specified multiple times. If omitted, all available variables are downloaded."),
+    limit: Optional[int] = typer.Option(None, "--limit", help="Limit processing to the first N files (useful for testing). If not specified, all matching files will be processed."),
+    force: bool = typer.Option(False, "--force", help="Force re-download and overwrite existing output files, even if they already exist."),
+    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Number of parallel workers for this specific command. Overrides global --max-workers and config file settings."),
     windowed: bool = typer.Option(
         True,
         "--windowed/--no-windowed",
-        help="Use HTTP range-based reads by default (falls back to full if needed).",
+        help="Use windowed (HTTP range-based) reads to only download pixels within your AOI. Faster and saves bandwidth. Use --no-windowed to download full files.",
     ),
     unit_normalize: bool = typer.Option(
         True,
         "--unit-normalize/--no-unit-normalize",
-        help="Normalize outputs to physical units (disable only for debugging).",
+        help="Convert output values to physical units (°C, mm, etc.) by applying scale/offset. Use --no-unit-normalize only for debugging raw GeoTIFF values.",
     ),
 ):
-    """Download and clip CHELSA v2.1 present-day climatology."""
+    """Download and clip CHELSA v2.1 present-day climatology (1981-2010) for your AOI."""
     context = _get_context(ctx)
     jobs = collect_present_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
     _print_plan(context, jobs, windowed, unit_normalize)

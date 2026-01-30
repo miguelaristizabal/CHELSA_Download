@@ -408,7 +408,8 @@ def _array_from_dataarray(dataarray, nodata_value: float):
 
 
 def _clear_scale_offset_attrs(dataarray) -> None:
-    for key in ("scale_factor", "add_offset", "scale", "offset", "_FillValue"):
+    """Clear scale/offset attributes but preserve nodata (_FillValue)."""
+    for key in ("scale_factor", "add_offset", "scale", "offset"):
         dataarray.attrs.pop(key, None)
         if hasattr(dataarray, "encoding"):
             dataarray.encoding.pop(key, None)

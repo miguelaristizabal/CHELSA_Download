@@ -46,7 +46,7 @@ class GlobalConfig:
     lists_dir: Path
     cache_dir: Path
     rclone_config: Optional[Path] = None
-    max_workers: int = 4
+    max_workers: int = 6
     trace_filelist_json: Optional[Path] = None
     present: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa02_bioclim"))
     trace: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa01_trace21k_bioclim"))
@@ -78,7 +78,7 @@ class GlobalConfig:
             lists_dir=_expand(paths.get("lists_dir")) or Path("./lists"),
             cache_dir=_expand(paths.get("cache_dir")) or Path("./cache"),
             rclone_config=_expand(raw.get("rclone", {}).get("config")),
-            max_workers=int(downloads.get("max_workers", 4)),
+            max_workers=int(downloads.get("max_workers", 6)),
             trace_filelist_json=_expand(paths.get("trace_filelist_json")),
             present=present_cfg,
             trace=trace_cfg,
@@ -137,7 +137,7 @@ class GlobalConfig:
             lists_dir=lists_dir,
             cache_dir=cache_dir,
             rclone_config=rclone_path,
-            max_workers=4,
+            max_workers=6,
             trace_filelist_json=trace_json,
             present=present,
             trace=trace,
