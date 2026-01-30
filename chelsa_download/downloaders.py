@@ -440,6 +440,11 @@ def _recompute_derived_outputs(
             result = recompute_bio07(arr05, arr06, job.nodata, logger)
             out_da = bio05.copy(deep=True)
             out_da.data = result
+            # Clear any existing _FillValue from source file before setting new nodata
+            for key in ("_FillValue",):
+                out_da.attrs.pop(key, None)
+                if hasattr(out_da, "encoding"):
+                    out_da.encoding.pop(key, None)
             out_da.rio.write_nodata(job.nodata, inplace=True)
             _clear_scale_offset_attrs(out_da)
             tags = {
@@ -465,6 +470,11 @@ def _recompute_derived_outputs(
             result = recompute_bio03(arr02, arr07, job.nodata, logger)
             out_da = bio02.copy(deep=True)
             out_da.data = result
+            # Clear any existing _FillValue from source file before setting new nodata
+            for key in ("_FillValue",):
+                out_da.attrs.pop(key, None)
+                if hasattr(out_da, "encoding"):
+                    out_da.encoding.pop(key, None)
             out_da.rio.write_nodata(job.nodata, inplace=True)
             _clear_scale_offset_attrs(out_da)
             tags = {
