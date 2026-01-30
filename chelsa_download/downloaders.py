@@ -310,14 +310,14 @@ def execute_jobs(
     progress = Progress(
         TextColumn("[progress.description]{task.description}"),
         BarColumn(),
-        TextColumn("{task.completed}/{task.total} files"),
-        TextColumn("{task.fields[downloaded]} @ {task.fields[speed]}"),
+        TextColumn("{task.completed}/{task.total}"),
+        TextColumn("{task.fields[status]}"),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
     )
 
     with progress:
-        overall = progress.add_task("files", total=len(job_list), downloaded="0 B", speed="0 B/s")
+        overall = progress.add_task("total", total=len(job_list), status="starting")
         total_bytes = 0
         start_time = time.time()
 
@@ -326,24 +326,43 @@ def execute_jobs(
             total_bytes += max(extra_bytes, 0)
             elapsed = max(time.time() - start_time, 0.001)
             speed_val = total_bytes / elapsed
+            if windowed:
+                status = "windowed"
+            else:
+                status = f"{_human_bytes(total_bytes)} @ {_human_speed(speed_val)}"
             progress.update(
                 overall,
                 advance=1,
-                downloaded=_human_bytes(total_bytes),
-                speed=_human_speed(speed_val),
+                status=status,
             )
 
-        def task_runner(job: DownloadJob):
+        job_tasks: Dict[int, int] = {}
+        for job in job_list:
+            job_tasks[id(job)] = progress.add_task(
+                f"{job.variable}:{job.entry.name}",
+                total=1,
+                status="queued",
+            )
+
+        def task_runner(job: DownloadJob, task_id: int):
+            progress.update(task_id, status="running")
             if windowed:
-                return _process_remote(job, aoi, logger, config, normalization_context)
+                message, bytes_dl, state = _process_remote(job, aoi, logger, config, normalization_context)
+                progress.update(task_id, advance=1, status=state)
+                return message, bytes_dl, state
             status_msg, bytes_dl, skipped = _download_one(job, config)
             if skipped:
+                progress.update(task_id, advance=1, status="skipped")
                 return status_msg, bytes_dl, "skipped"
             msg = _process_one(job, aoi, logger, normalization_context)
+            progress.update(task_id, advance=1, status="processed")
             return msg, bytes_dl, "processed"
 
         with ThreadPoolExecutor(max_workers=max_workers or config.max_workers) as pool:
-            futures = {pool.submit(task_runner, job): job for job in job_list}
+            futures = {
+                pool.submit(task_runner, job, job_tasks[id(job)]): job
+                for job in job_list
+            }
             for future in as_completed(futures):
                 job = futures[future]
                 try:
@@ -357,6 +376,8 @@ def execute_jobs(
                 except Exception as exc:  # pragma: no cover
                     summary["failed"] += 1
                     logger.error("Failed %s: %s", job.entry.name, exc)
+                    task_id = job_tasks[id(job)]
+                    progress.update(task_id, advance=1, status="failed")
                     update_overall(0)
 
     if unit_normalize:
@@ -398,7 +419,7 @@ def _array_from_dataarray(dataarray, nodata_value: float):
 
 
 def _clear_scale_offset_attrs(dataarray) -> None:
-    for key in ("scale_factor", "add_offset", "scale", "offset"):
+    for key in ("scale_factor", "add_offset", "scale", "offset", "_FillValue"):
         dataarray.attrs.pop(key, None)
         if hasattr(dataarray, "encoding"):
             dataarray.encoding.pop(key, None)
@@ -408,14 +429,14 @@ def _recompute_derived_outputs(
     jobs: Iterable[DownloadJob],
     config: GlobalConfig,
     logger,
-    recompute_bio07: bool,
-    recompute_bio03: bool,
+    recompute_bio07_flag: bool,
+    recompute_bio03_flag: bool,
 ) -> None:
     jobs_by_var: Dict[str, List[DownloadJob]] = {}
     for job in jobs:
         jobs_by_var.setdefault(job.variable.lower(), []).append(job)
 
-    if recompute_bio07:
+    if recompute_bio07_flag:
         for job in jobs_by_var.get("bio07", []):
             dep05 = _dependency_output_path(job, "bio05", config)
             dep06 = _dependency_output_path(job, "bio06", config)
@@ -440,7 +461,7 @@ def _recompute_derived_outputs(
             write_raster(out_da, job.output_path, tags=tags)
             logger.info("Recomputed bio07 from bio05/bio06: %s", job.output_path.name)
 
-    if recompute_bio03:
+    if recompute_bio03_flag:
         for job in jobs_by_var.get("bio03", []):
             dep02 = _dependency_output_path(job, "bio02", config)
             dep07 = _dependency_output_path(job, "bio07", config)

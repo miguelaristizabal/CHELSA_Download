@@ -44,6 +44,12 @@ def clip_raster(source: SourcePath, aoi_gdf: gpd.GeoDataFrame):
 
 
 def write_raster(dataarray, destination: Path, tags: dict | None = None):
+    # Avoid conflicts between attrs and encoding (xarray _FillValue handling).
+    dataarray = dataarray.copy(deep=False)
+    for key in ("_FillValue", "scale_factor", "add_offset", "scale", "offset"):
+        dataarray.attrs.pop(key, None)
+        if hasattr(dataarray, "encoding"):
+            dataarray.encoding.pop(key, None)
     dataarray.rio.to_raster(
         destination,
         dtype="float32",

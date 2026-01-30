@@ -51,7 +51,7 @@ def _var_units_and_tags(var: str, unit_normalize: bool) -> Dict[str, str]:
 
 
 def _clear_scale_offset(dataarray) -> None:
-    for key in ("scale_factor", "add_offset", "scale", "offset"):
+    for key in ("scale_factor", "add_offset", "scale", "offset", "_FillValue"):
         dataarray.attrs.pop(key, None)
         if hasattr(dataarray, "encoding"):
             dataarray.encoding.pop(key, None)
