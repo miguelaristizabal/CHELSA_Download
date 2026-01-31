@@ -37,7 +37,7 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 
 #### 3) Install CHELSA_Download v.3 from the GitHub tag tarball
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v.3.tar.gz"
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
 ```
 #### 4) Run your first download (uses bundled lists and default remotes)
 ```bash
