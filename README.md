@@ -35,9 +35,9 @@ sudo -v ; curl https://rclone.org/install.sh | sudo bash
 ```
   - Verify: `rclone version`
 
-#### 3) Install CHELSA_Download v0.3.3 from the GitHub tag tarball
+#### 3) Install CHELSA_Download v.3 from the GitHub tag tarball
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.3.3.tar.gz"
+python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v.3.tar.gz"
 ```
 #### 4) Run your first download (uses bundled lists and default remotes)
 ```bash
@@ -46,7 +46,7 @@ chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 
 This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory. By default, the CLI uses windowed COG reads (HTTP range requests) to avoid full downloads and **normalizes all outputs to physical units** (no GeoTIFF scale/offset tags). Use `--no-windowed` for full downloads or `--no-unit-normalize` for raw debugging.
 
-To install a different version, replace `v0.3.3` in the URL with the tag you want.
+To install a different version, replace `v0.4.0` in the URL with the tag you want.
 
 #### Development install (from source)
 
