@@ -30,4 +30,8 @@ def setup_logging(verbose: bool = False, quiet: bool = False) -> logging.Logger:
     )
     logger = logging.getLogger("chelsa-download")
     logger.setLevel(level)
+    
+    # Suppress noisy GDAL/rasterio warnings about source file issues
+    logging.getLogger("rasterio._env").setLevel(logging.ERROR)
+    
     return logger

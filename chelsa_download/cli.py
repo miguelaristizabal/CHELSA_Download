@@ -20,7 +20,9 @@ os.environ["GDAL_HTTP_MERGE_CONSECUTIVE_RANGES"] = "YES"
 os.environ["GDAL_HTTP_MULTIPLEX"] = "YES"
 os.environ["CPL_VSIL_CURL_ALLOWED_EXTENSIONS"] = ".tif,.TIF"
 # 3. Increase buffer for fewer requests on high-latency connections (512KB -> 1MB)
-os.environ["CPL_VSIL_CURL_CHUNK_SIZE"] = "1048576" 
+os.environ["CPL_VSIL_CURL_CHUNK_SIZE"] = "1048576"
+# 4. Suppress harmless GDAL warnings about source file issues
+os.environ["CPL_LOG"] = "ERROR"  # Only show errors, not warnings 
 
 from .config import GlobalConfig
 from .downloaders import (

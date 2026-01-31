@@ -50,7 +50,7 @@ def parse_time_slice_from_filename(filename: str) -> Optional[str]:
 
 
 def parse_variable_from_listfilename(name: str) -> Optional[str]:
-    match = re.match(r"(trace|present|trace_monthly|present_monthly)_(.+)\.txt$", name)
+    match = re.match(r"(trace_monthly|present_monthly|trace|present)_(.+)\.txt$", name)
     if match:
         return match.group(2)
     return None

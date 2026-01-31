@@ -89,6 +89,10 @@ def _data_and_mask(dataarray, nodata_value: float) -> Tuple[np.ndarray, np.ndarr
         src = dataarray.rio.nodata
         if src is not None and not np.isnan(src):
             mask |= arr == float(src)
+    
+    # Handle 0 as nodata for temperature variables (0 Kelvin is impossible)
+    # This is needed for TraCE21k data which uses 0 as nodata
+    mask |= arr == 0
 
     return arr, mask
 
