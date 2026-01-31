@@ -12,6 +12,8 @@ from .config import GlobalConfig, compute_sha1
 
 TRACE_FILENAME_RE = re.compile(r"CHELSA[_-]TraCE21k_([a-z0-9]+)_(\-?\d+)_", re.IGNORECASE)
 PRESENT_FILENAME_RE = re.compile(r"CHELSA_(bio\d{1,2}|scd)_(\d{4}-\d{4})_", re.IGNORECASE)
+PRESENT_MONTHLY_RE = re.compile(r"CHELSA_(pr|tasmin|tasmax)_(\d{2})_(\d{4}-\d{4})_", re.IGNORECASE)
+TRACE_MONTHLY_RE = re.compile(r"CHELSA_TraCE21k_(pr|tasmin|tasmax)_(\d{2})_([\-\d]{4,5})_", re.IGNORECASE)
 
 
 def infer_time_id(filename: str) -> Optional[int]:
@@ -26,8 +28,29 @@ def trace_time_id_to_ka(time_id: int) -> float:
     return (20 - time_id) / 10.0
 
 
+def parse_month_from_filename(filename: str) -> Optional[int]:
+    """Extract month number from monthly data filename."""
+    # Try present monthly format
+    match = PRESENT_MONTHLY_RE.search(filename)
+    if match:
+        return int(match.group(2))
+    # Try trace monthly format
+    match = TRACE_MONTHLY_RE.search(filename)
+    if match:
+        return int(match.group(2))
+    return None
+
+
+def parse_time_slice_from_filename(filename: str) -> Optional[str]:
+    """Extract zero-padded time slice from trace monthly filename."""
+    match = TRACE_MONTHLY_RE.search(filename)
+    if match:
+        return match.group(3)  # Returns the zero-padded string like "-039" or "0020"
+    return None
+
+
 def parse_variable_from_listfilename(name: str) -> Optional[str]:
-    match = re.match(r"(trace|present)_(.+)\.txt$", name)
+    match = re.match(r"(trace|present|trace_monthly|present_monthly)_(.+)\.txt$", name)
     if match:
         return match.group(2)
     return None
@@ -39,6 +62,7 @@ class ListFileEntry:
     size: Optional[int] = None
     time_id: Optional[int] = None
     path: Optional[str] = None
+    month: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Optional[int | str]]:
         return {
@@ -46,6 +70,7 @@ class ListFileEntry:
             "size": self.size,
             "time_id": self.time_id,
             "path": self.path,
+            "month": self.month,
         }
 
     @classmethod
@@ -55,6 +80,7 @@ class ListFileEntry:
             size=int(raw["size"]) if raw.get("size") is not None else None,
             time_id=int(raw["time_id"]) if raw.get("time_id") is not None else None,
             path=str(raw.get("path")) if raw.get("path") else None,
+            month=int(raw["month"]) if raw.get("month") is not None else None,
         )
 
 
@@ -192,6 +218,62 @@ class ListManager:
             written[var] = list_path
         return written
 
+    def build_present_monthly_lists(self, records: Iterable[Dict[str, object]], output_dir: Path) -> Dict[str, Path]:
+        """Build lists for present-day monthly data (pr, tasmin, tasmax)."""
+        grouped: Dict[str, List[Dict[str, object]]] = {}
+        for entry in records:
+            if entry.get("IsDir"):
+                continue
+            name = str(entry.get("Name", ""))
+            match = PRESENT_MONTHLY_RE.search(name)
+            if not match:
+                continue
+            var = match.group(1).lower()
+            grouped.setdefault(var, []).append(entry)
+
+        written: Dict[str, Path] = {}
+        for var, entries in grouped.items():
+            entries_sorted = sorted(entries, key=lambda item: (
+                parse_month_from_filename(item.get("Name", "")) or 0,
+                item.get("Name", "")
+            ))
+            filenames = [entry["Name"] for entry in entries_sorted]
+            list_path = output_dir / f"present_monthly_{var}.txt"
+            self.write_list(list_path, filenames)
+            metadata = build_present_monthly_metadata(var, entries_sorted)
+            self.save_metadata(list_path, metadata)
+            written[var] = list_path
+        return written
+
+    def build_trace_monthly_lists(self, records: Iterable[Dict[str, object]], output_dir: Path) -> Dict[str, Path]:
+        """Build lists for TraCE21k monthly data (pr, tasmin, tasmax)."""
+        grouped: Dict[str, List[Dict[str, object]]] = {}
+        for entry in records:
+            if entry.get("IsDir"):
+                continue
+            name = str(entry.get("Name", ""))
+            match = TRACE_MONTHLY_RE.search(name)
+            if not match:
+                continue
+            var = match.group(1).lower()
+            grouped.setdefault(var, []).append(entry)
+
+        written: Dict[str, Path] = {}
+        for var, entries in grouped.items():
+            # Sort by month first, then time slice
+            entries_sorted = sorted(entries, key=lambda item: (
+                parse_month_from_filename(item.get("Name", "")) or 0,
+                parse_time_slice_from_filename(item.get("Name", "")) or "",
+                item.get("Name", "")
+            ))
+            filenames = [entry["Name"] for entry in entries_sorted]
+            list_path = output_dir / f"trace_monthly_{var}.txt"
+            self.write_list(list_path, filenames)
+            metadata = build_trace_monthly_metadata(var, entries_sorted)
+            self.save_metadata(list_path, metadata)
+            written[var] = list_path
+        return written
+
     def iter_list_files(self, target_dir: Path, prefix: str) -> Iterable[Path]:
         if not target_dir.exists():
             return []
@@ -260,6 +342,96 @@ def build_present_metadata(var: str, entries: Sequence[Dict[str, object]]) -> Li
     }
     return ListMetadata(
         kind="present",
+        variable=var,
+        files=files,
+        source={"type": "rclone"},
+        stats=stats,
+    )
+
+
+def build_present_monthly_metadata(var: str, entries: Sequence[Dict[str, object]]) -> ListMetadata:
+    """Build metadata for present monthly data."""
+    files: List[ListFileEntry] = []
+    date_range: Optional[str] = None
+    months_seen: set = set()
+    
+    for entry in entries:
+        name = str(entry.get("Name", entry.get("name")))
+        match = PRESENT_MONTHLY_RE.search(name)
+        month = None
+        if match:
+            date_range = match.group(3)
+            month = int(match.group(2))
+            months_seen.add(month)
+        else:
+            month = parse_month_from_filename(name)
+            if month:
+                months_seen.add(month)
+        
+        files.append(
+            ListFileEntry(
+                name=name,
+                size=int(entry.get("Size")) if entry.get("Size") else None,
+                path=str(entry.get("Path") or entry.get("path") or name),
+                month=month,
+            )
+        )
+
+    stats = {
+        "count": len(files),
+        "date_range": date_range,
+        "months": sorted(list(months_seen)),
+    }
+    return ListMetadata(
+        kind="present_monthly",
+        variable=var,
+        files=files,
+        source={"type": "rclone"},
+        stats=stats,
+    )
+
+
+def build_trace_monthly_metadata(var: str, entries: Sequence[Dict[str, object]]) -> ListMetadata:
+    """Build metadata for trace monthly data."""
+    files: List[ListFileEntry] = []
+    time_slices_seen: set = set()
+    months_seen: set = set()
+    
+    for entry in entries:
+        name = str(entry.get("Name", entry.get("name")))
+        month = parse_month_from_filename(name)
+        time_slice = parse_time_slice_from_filename(name)
+        
+        if month:
+            months_seen.add(month)
+        if time_slice:
+            time_slices_seen.add(time_slice)
+        
+        # Convert time slice string to int for time_id
+        time_id = None
+        if time_slice:
+            try:
+                time_id = int(time_slice)
+            except ValueError:
+                pass
+        
+        files.append(
+            ListFileEntry(
+                name=name,
+                size=int(entry.get("Size")) if entry.get("Size") is not None else None,
+                time_id=time_id,
+                path=str(entry.get("Path") or entry.get("path") or name),
+                month=month,
+            )
+        )
+
+    stats = {
+        "count": len(files),
+        "months": sorted(list(months_seen)),
+        "time_slices": sorted(list(time_slices_seen)),
+    }
+    return ListMetadata(
+        kind="trace_monthly",
         variable=var,
         files=files,
         source={"type": "rclone"},

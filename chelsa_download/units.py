@@ -11,6 +11,8 @@ ABS_TEMP_VARS = {"bio01", "bio05", "bio06", "bio08", "bio09", "bio10", "bio11"}
 TEMP_RANGE_VARS = {"bio02", "bio04", "bio07"}
 PRECIP_ANNUAL_VARS = {"bio12"}
 PRECIP_MONTHLY_VARS = {"bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19"}
+MONTHLY_TEMP_VARS = {"tasmin", "tasmax"}  # K*10 -> degC
+MONTHLY_PRECIP_VAR = {"pr"}  # mm*10 -> mm
 
 
 @dataclass(frozen=True)
@@ -31,7 +33,7 @@ def _var_units_and_tags(var: str, unit_normalize: bool) -> Dict[str, str]:
         "unit_normalized": "true",
         "unit_normalization_version": NORMALIZATION_VERSION,
     }
-    if var in ABS_TEMP_VARS or var in TEMP_RANGE_VARS:
+    if var in ABS_TEMP_VARS or var in TEMP_RANGE_VARS or var in MONTHLY_TEMP_VARS:
         tags["units"] = "degC"
     elif var == "bio03":
         tags["units"] = "%"
@@ -39,6 +41,8 @@ def _var_units_and_tags(var: str, unit_normalize: bool) -> Dict[str, str]:
         tags["units"] = "kg m-2 year-1"
     elif var in PRECIP_MONTHLY_VARS:
         tags["units"] = "kg m-2 month-1"
+    elif var in MONTHLY_PRECIP_VAR:
+        tags["units"] = "mm"
 
     if var in {"bio02", "bio07"}:
         tags["quantity"] = "temperature_range"
@@ -46,6 +50,10 @@ def _var_units_and_tags(var: str, unit_normalize: bool) -> Dict[str, str]:
         tags["quantity"] = "temperature_stdev"
     elif var == "bio03":
         tags["quantity"] = "isothermality"
+    elif var in MONTHLY_TEMP_VARS:
+        tags["quantity"] = "temperature"
+    elif var in MONTHLY_PRECIP_VAR:
+        tags["quantity"] = "precipitation"
 
     return tags
 
@@ -107,6 +115,9 @@ def normalize_units(
     if context.unit_normalize:
         if var in ABS_TEMP_VARS:
             arr[valid] = arr[valid] * 0.1 - 273.15
+        elif var in MONTHLY_TEMP_VARS:
+            # tasmin, tasmax: K*10 -> degC (divide by 10, then convert K to C)
+            arr[valid] = arr[valid] / 10.0 - 273.15
         elif var in TEMP_RANGE_VARS:
             if product == "trace" and var == "bio07":
                 arr[valid] = arr[valid] * 0.1 - 273.15
@@ -127,6 +138,9 @@ def normalize_units(
             arr[valid] = arr[valid]
         elif var in PRECIP_MONTHLY_VARS:
             arr[valid] = arr[valid] * 0.1
+        elif var in MONTHLY_PRECIP_VAR:
+            # pr: mm*10 -> mm
+            arr[valid] = arr[valid] / 10.0
 
     arr = _apply_mask(arr, mask, nodata_value)
     dataarray.data = arr
@@ -153,7 +167,7 @@ def _validate_normalized(var: str, arr: np.ndarray, nodata_value: float, logger)
     if median is None:
         return
 
-    if var in ABS_TEMP_VARS:
+    if var in ABS_TEMP_VARS or var in MONTHLY_TEMP_VARS:
         if median > 100:
             logger.warning("Median for %s looks like Kelvin (%.2f). Expected degC.", var, median)
         return
@@ -170,7 +184,7 @@ def _validate_normalized(var: str, arr: np.ndarray, nodata_value: float, logger)
             logger.warning("Median for bio03 out of expected range (%.2f).", median)
         return
 
-    if var in PRECIP_ANNUAL_VARS | PRECIP_MONTHLY_VARS:
+    if var in PRECIP_ANNUAL_VARS | PRECIP_MONTHLY_VARS | MONTHLY_PRECIP_VAR:
         if np.nanmin(arr[arr != nodata_value]) < 0:
             logger.warning("Negative precipitation values found for %s.", var)
 

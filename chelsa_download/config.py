@@ -50,6 +50,8 @@ class GlobalConfig:
     trace_filelist_json: Optional[Path] = None
     present: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa02_bioclim"))
     trace: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa01_trace21k_bioclim"))
+    present_monthly: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa02_climatologies"))
+    trace_monthly: TargetConfig = field(default_factory=lambda: TargetConfig(remote="chelsa01_trace_centennial"))
 
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "GlobalConfig":
@@ -72,6 +74,8 @@ class GlobalConfig:
         downloads = raw.get("downloads", {})
         trace_cfg = cls._parse_target(raw.get("trace", {}))
         present_cfg = cls._parse_target(raw.get("present", {}))
+        present_monthly_cfg = cls._parse_target(raw.get("present_monthly", {}))
+        trace_monthly_cfg = cls._parse_target(raw.get("trace_monthly", {}))
 
         return cls(
             aoi_path=_expand(paths.get("aoi")) or Path("./aoi.geojson"),
@@ -82,6 +86,8 @@ class GlobalConfig:
             trace_filelist_json=_expand(paths.get("trace_filelist_json")),
             present=present_cfg,
             trace=trace_cfg,
+            present_monthly=present_monthly_cfg,
+            trace_monthly=trace_monthly_cfg,
         )
 
     @staticmethod
@@ -104,6 +110,8 @@ class GlobalConfig:
             "trace_filelist_json": str(self.trace_filelist_json) if self.trace_filelist_json else None,
             "present": self.present.__dict__,
             "trace": self.trace.__dict__,
+            "present_monthly": self.present_monthly.__dict__,
+            "trace_monthly": self.trace_monthly.__dict__,
         }
 
     @classmethod
@@ -131,6 +139,20 @@ class GlobalConfig:
             output_dir=(outputs_root / "trace").resolve(),
             nodata_value=-9999.0,
         )
+        present_monthly = TargetConfig(
+            remote="chelsa02_climatologies",
+            prefix="",
+            lists_subdir="present_monthly",
+            output_dir=(outputs_root / "present_monthly").resolve(),
+            nodata_value=-9999.0,
+        )
+        trace_monthly = TargetConfig(
+            remote="chelsa01_trace_centennial",
+            prefix="",
+            lists_subdir="trace_monthly",
+            output_dir=(outputs_root / "trace_monthly").resolve(),
+            nodata_value=-9999.0,
+        )
 
         return cls(
             aoi_path=aoi_path.resolve(),
@@ -141,6 +163,8 @@ class GlobalConfig:
             trace_filelist_json=trace_json,
             present=present,
             trace=trace,
+            present_monthly=present_monthly,
+            trace_monthly=trace_monthly,
         )
 
 

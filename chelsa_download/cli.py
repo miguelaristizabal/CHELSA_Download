@@ -25,9 +25,13 @@ os.environ["CPL_VSIL_CURL_CHUNK_SIZE"] = "1048576"
 from .config import GlobalConfig
 from .downloaders import (
     collect_present_jobs,
+    collect_present_monthly_jobs,
     collect_trace_jobs,
+    collect_trace_monthly_jobs,
     execute_jobs,
     prepare_present_listing,
+    prepare_present_monthly_listing,
+    prepare_trace_monthly_listing,
     DownloadJob,
 )
 from .list_manager import ListManager
@@ -134,7 +138,7 @@ def main(
 @app.command("prepare-lists")
 def prepare_lists(
     ctx: typer.Context,
-    kind: str = typer.Option(..., "--kind", "-k", help="Type of file lists to generate: 'trace' for TraCE21k paleoclimate data, or 'present' for modern (1981-2010) climatology."),
+    kind: str = typer.Option(..., "--kind", "-k", help="Type of file lists to generate: 'trace' for TraCE21k paleoclimate bioclim data, 'present' for modern (1981-2010) bioclim climatology, 'present_monthly' for modern monthly data (pr/tasmin/tasmax), or 'trace_monthly' for TraCE21k monthly centennial data."),
     source_json: Optional[Path] = typer.Option(
         None,
         "--source-json",
@@ -164,8 +168,22 @@ def prepare_lists(
         records = prepare_present_listing(cfg, context.logger)
         created = manager.build_present_lists(records, output_dir.resolve())
         context.logger.info("Wrote %d present-day lists to %s", len(created), output_dir)
+    elif kind_lower == "present_monthly":
+        output_dir = Path(cfg.lists_dir)
+        if cfg.present_monthly.lists_subdir:
+            output_dir = output_dir / cfg.present_monthly.lists_subdir
+        records = prepare_present_monthly_listing(cfg, context.logger)
+        created = manager.build_present_monthly_lists(records, output_dir.resolve())
+        context.logger.info("Wrote %d present monthly lists to %s", len(created), output_dir)
+    elif kind_lower == "trace_monthly":
+        output_dir = Path(cfg.lists_dir)
+        if cfg.trace_monthly.lists_subdir:
+            output_dir = output_dir / cfg.trace_monthly.lists_subdir
+        records = prepare_trace_monthly_listing(cfg, context.logger)
+        created = manager.build_trace_monthly_lists(records, output_dir.resolve())
+        context.logger.info("Wrote %d trace monthly lists to %s", len(created), output_dir)
     else:
-        raise typer.BadParameter(f"Unsupported kind '{kind}'. Choose 'trace' or 'present'.")
+        raise typer.BadParameter(f"Unsupported kind '{kind}'. Choose 'trace', 'present', 'present_monthly', or 'trace_monthly'.")
 
 
 @app.command("download-trace")
@@ -232,3 +250,131 @@ def download_present(
         unit_normalize=unit_normalize,
     )
     context.logger.info("Present download summary: %s", summary)
+
+
+@app.command("download-present-monthly")
+def download_present_monthly(
+    ctx: typer.Context,
+    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter downloads to specific monthly variables (e.g., --var pr --var tasmin). Valid options: pr, tasmin, tasmax. Can be specified multiple times. If omitted, all available variables are downloaded."),
+    month: List[int] = typer.Option(None, "--month", "-m", help="Filter downloads to specific months (1-12). Can be specified multiple times (e.g., --month 1 --month 7). If omitted along with --month-range, all 12 months are downloaded."),
+    month_range: Optional[str] = typer.Option(None, "--month-range", help="Filter downloads to a range of months (format: start-end, e.g., --month-range 1-6 for January through June). Inclusive range."),
+    limit: Optional[int] = typer.Option(None, "--limit", help="Limit processing to the first N files (useful for testing). If not specified, all matching files will be processed."),
+    force: bool = typer.Option(False, "--force", help="Force re-download and overwrite existing output files, even if they already exist."),
+    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Number of parallel workers for this specific command. Overrides global --max-workers and config file settings."),
+    windowed: bool = typer.Option(
+        True,
+        "--windowed/--no-windowed",
+        help="Use windowed (HTTP range-based) reads to only download pixels within your AOI. Faster and saves bandwidth. Use --no-windowed to download full files.",
+    ),
+    unit_normalize: bool = typer.Option(
+        True,
+        "--unit-normalize/--no-unit-normalize",
+        help="Convert output values to physical units (°C for temperature, mm for precipitation) by applying transformations. Use --no-unit-normalize only for debugging raw GeoTIFF values.",
+    ),
+):
+    """Download and clip CHELSA v2.1 present-day monthly climatologies (1981-2010) for your AOI.
+    
+    Available variables: pr (precipitation), tasmin (minimum temperature), tasmax (maximum temperature).
+    Each variable includes 12 monthly values (January through December).
+    """
+    context = _get_context(ctx)
+    month_range_tuple = None
+    if month_range:
+        try:
+            start, end = map(int, month_range.split("-"))
+            month_range_tuple = (start, end)
+        except ValueError:
+            context.logger.error("Invalid --month-range format. Use: start-end (e.g., 1-6)")
+            raise typer.Exit(code=1)
+    
+    jobs = collect_present_monthly_jobs(
+        context.config,
+        context.manager,
+        vars_filter=variable or None,
+        months=month or None,
+        month_range=month_range_tuple,
+        limit=limit,
+        force=force,
+    )
+    _print_plan(context, jobs, windowed, unit_normalize)
+    summary = execute_jobs(
+        jobs,
+        context.config,
+        context.logger,
+        max_workers=max_workers,
+        windowed=windowed,
+        unit_normalize=unit_normalize,
+    )
+    context.logger.info("Present monthly download summary: %s", summary)
+
+
+@app.command("download-trace-monthly")
+def download_trace_monthly(
+    ctx: typer.Context,
+    variable: List[str] = typer.Option(None, "--var", "-v", help="Filter downloads to specific monthly variables (e.g., --var pr --var tasmin). Valid options: pr, tasmin, tasmax. Can be specified multiple times. If omitted, all available variables are downloaded."),
+    time_slice: List[int] = typer.Option(None, "--time-slice", "-t", help="Filter downloads to specific time slices in years BP (e.g., --time-slice -200 --time-slice 0). Range: -200 to 20. Can be specified multiple times. If omitted along with --time-range, all available time slices are downloaded."),
+    time_range: Optional[str] = typer.Option(None, "--time-range", help="Filter downloads to a range of time slices (format: start-end, e.g., --time-range -200--100). Inclusive range in years BP."),
+    time_interval: Optional[int] = typer.Option(None, "--time-interval", help="Step size when using --time-range (e.g., --time-range -200-0 --time-interval 10 downloads every 10th time slice). Must be positive."),
+    month: List[int] = typer.Option(None, "--month", "-m", help="Filter downloads to specific months (1-12). Can be specified multiple times (e.g., --month 1 --month 7). If omitted along with --month-range, all 12 months are downloaded."),
+    month_range: Optional[str] = typer.Option(None, "--month-range", help="Filter downloads to a range of months (format: start-end, e.g., --month-range 1-6 for January through June). Inclusive range."),
+    limit: Optional[int] = typer.Option(None, "--limit", help="Limit processing to the first N files (useful for testing). If not specified, all matching files will be processed."),
+    force: bool = typer.Option(False, "--force", help="Force re-download and overwrite existing output files, even if they already exist."),
+    max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Number of parallel workers for this specific command. Overrides global --max-workers and config file settings."),
+    windowed: bool = typer.Option(
+        True,
+        "--windowed/--no-windowed",
+        help="Use windowed (HTTP range-based) reads to only download pixels within your AOI. Faster and saves bandwidth. Use --no-windowed to download full files.",
+    ),
+    unit_normalize: bool = typer.Option(
+        True,
+        "--unit-normalize/--no-unit-normalize",
+        help="Convert output values to physical units (°C for temperature, mm for precipitation) by applying transformations. Use --no-unit-normalize only for debugging raw GeoTIFF values.",
+    ),
+):
+    """Download and clip CHELSA TraCE21k monthly centennial data for your AOI.
+    
+    Available variables: pr (precipitation), tasmin (minimum temperature), tasmax (maximum temperature).
+    Time coverage: -200 to 20 years BP (Before Present, where 0 = 1950 CE) in centennial steps.
+    Each variable includes 12 monthly values (January through December) for each time slice.
+    """
+    context = _get_context(ctx)
+    time_range_tuple = None
+    if time_range:
+        try:
+            start, end = map(int, time_range.split("-"))
+            time_range_tuple = (start, end)
+        except ValueError:
+            context.logger.error("Invalid --time-range format. Use: start-end (e.g., -200--100)")
+            raise typer.Exit(code=1)
+    
+    month_range_tuple = None
+    if month_range:
+        try:
+            start, end = map(int, month_range.split("-"))
+            month_range_tuple = (start, end)
+        except ValueError:
+            context.logger.error("Invalid --month-range format. Use: start-end (e.g., 1-6)")
+            raise typer.Exit(code=1)
+    
+    jobs = collect_trace_monthly_jobs(
+        context.config,
+        context.manager,
+        vars_filter=variable or None,
+        time_slice=time_slice or None,
+        time_range=time_range_tuple,
+        time_interval=time_interval,
+        months=month or None,
+        month_range=month_range_tuple,
+        limit=limit,
+        force=force,
+    )
+    _print_plan(context, jobs, windowed, unit_normalize)
+    summary = execute_jobs(
+        jobs,
+        context.config,
+        context.logger,
+        max_workers=max_workers,
+        windowed=windowed,
+        unit_normalize=unit_normalize,
+    )
+    context.logger.info("Trace monthly download summary: %s", summary)

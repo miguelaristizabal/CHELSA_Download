@@ -72,6 +72,76 @@ def present_remote_subdir(variable: str) -> str:
     return v
 
 
+def filter_by_time_slice(
+    entries: List[ListFileEntry],
+    time_slice: Optional[List[int]] = None,
+    time_range: Optional[tuple[int, int]] = None,
+    time_interval: Optional[int] = None,
+) -> List[ListFileEntry]:
+    """Filter entries by time slice criteria."""
+    if not any([time_slice, time_range, time_interval]):
+        return entries
+    
+    filtered = []
+    for entry in entries:
+        if entry.time_id is None:
+            continue
+        
+        # Check specific time slices
+        if time_slice and entry.time_id not in time_slice:
+            continue
+        
+        # Check time range
+        if time_range:
+            min_time, max_time = time_range
+            if entry.time_id < min_time or entry.time_id > max_time:
+                continue
+        
+        # Check interval (skip pattern)
+        if time_interval and time_interval > 1:
+            # For interval, we want every Nth slice from the minimum
+            # Assuming time slices are sorted, we check if this one matches the interval
+            if time_range:
+                offset = entry.time_id - min_time
+            else:
+                offset = entry.time_id - (-200)  # Default minimum is -200
+            if offset % time_interval != 0:
+                continue
+        
+        filtered.append(entry)
+    
+    return filtered
+
+
+def filter_by_month(
+    entries: List[ListFileEntry],
+    months: Optional[List[int]] = None,
+    month_range: Optional[tuple[int, int]] = None,
+) -> List[ListFileEntry]:
+    """Filter entries by month criteria."""
+    if not any([months, month_range]):
+        return entries
+    
+    filtered = []
+    for entry in entries:
+        if entry.month is None:
+            continue
+        
+        # Check specific months
+        if months and entry.month not in months:
+            continue
+        
+        # Check month range
+        if month_range:
+            min_month, max_month = month_range
+            if entry.month < min_month or entry.month > max_month:
+                continue
+        
+        filtered.append(entry)
+    
+    return filtered
+
+
 @dataclass
 class DownloadJob:
     kind: str
@@ -195,6 +265,138 @@ def collect_present_jobs(
                     temp_path=temp_path,
                     output_path=out_path,
                     nodata=config.present.nodata_value,
+                    force=force,
+                )
+            )
+            if limit and len(jobs) >= limit:
+                return jobs
+    return jobs
+
+
+def collect_present_monthly_jobs(
+    config: GlobalConfig,
+    manager: ListManager,
+    vars_filter: Optional[List[str]] = None,
+    months: Optional[List[int]] = None,
+    month_range: Optional[tuple[int, int]] = None,
+    limit: Optional[int] = None,
+    force: bool = False,
+) -> List[DownloadJob]:
+    """Collect jobs for present-day monthly data (pr, tasmin, tasmax)."""
+    lists_root = Path(config.lists_dir)
+    if config.present_monthly.lists_subdir:
+        lists_root = lists_root / config.present_monthly.lists_subdir
+    lists_root = lists_root.resolve()
+    jobs: List[DownloadJob] = []
+    selected_vars = {v.lower() for v in vars_filter} if vars_filter else None
+    
+    for list_path in manager.iter_list_files(lists_root, "present_monthly"):
+        variable = parse_variable_from_listfilename(list_path.name)
+        if not variable:
+            continue
+        if selected_vars and variable.lower() not in selected_vars:
+            continue
+        metadata = manager.load_metadata(list_path)
+        
+        # Filter by month
+        filtered_entries = filter_by_month(metadata.files, months, month_range)
+        
+        out_dir = Path(config.present_monthly.output_dir) / variable
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        for entry in filtered_entries:
+            if entry.path:
+                joined = "/".join(
+                    part
+                    for part in [
+                        config.present_monthly.prefix.strip("/") if config.present_monthly.prefix else "",
+                        entry.path.strip("/"),
+                    ]
+                    if part
+                )
+                remote_path = f"{config.present_monthly.remote}:{joined}"
+            else:
+                remote_path = build_remote_path(config.present_monthly.remote, config.present_monthly.prefix, variable, entry.name)
+            temp_path = Path(config.cache_dir) / entry.name
+            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            jobs.append(
+                DownloadJob(
+                    kind="present_monthly",
+                    variable=variable,
+                    entry=entry,
+                    metadata=metadata,
+                    remote_path=remote_path,
+                    temp_path=temp_path,
+                    output_path=out_path,
+                    nodata=config.present_monthly.nodata_value,
+                    force=force,
+                )
+            )
+            if limit and len(jobs) >= limit:
+                return jobs
+    return jobs
+
+
+def collect_trace_monthly_jobs(
+    config: GlobalConfig,
+    manager: ListManager,
+    vars_filter: Optional[List[str]] = None,
+    time_slice: Optional[List[int]] = None,
+    time_range: Optional[tuple[int, int]] = None,
+    time_interval: Optional[int] = None,
+    months: Optional[List[int]] = None,
+    month_range: Optional[tuple[int, int]] = None,
+    limit: Optional[int] = None,
+    force: bool = False,
+) -> List[DownloadJob]:
+    """Collect jobs for TraCE21k monthly data (pr, tasmin, tasmax)."""
+    lists_root = Path(config.lists_dir)
+    if config.trace_monthly.lists_subdir:
+        lists_root = lists_root / config.trace_monthly.lists_subdir
+    lists_root = lists_root.resolve()
+    jobs: List[DownloadJob] = []
+    selected_vars = {v.lower() for v in vars_filter} if vars_filter else None
+    
+    for list_path in manager.iter_list_files(lists_root, "trace_monthly"):
+        variable = parse_variable_from_listfilename(list_path.name)
+        if not variable:
+            continue
+        if selected_vars and variable.lower() not in selected_vars:
+            continue
+        metadata = manager.load_metadata(list_path)
+        
+        # Filter by time slice and month
+        filtered_entries = filter_by_time_slice(metadata.files, time_slice, time_range, time_interval)
+        filtered_entries = filter_by_month(filtered_entries, months, month_range)
+        
+        out_dir = Path(config.trace_monthly.output_dir) / variable
+        out_dir.mkdir(parents=True, exist_ok=True)
+        
+        for entry in filtered_entries:
+            if entry.path:
+                joined = "/".join(
+                    part
+                    for part in [
+                        config.trace_monthly.prefix.strip("/") if config.trace_monthly.prefix else "",
+                        entry.path.strip("/"),
+                    ]
+                    if part
+                )
+                remote_path = f"{config.trace_monthly.remote}:{joined}"
+            else:
+                remote_path = build_remote_path(config.trace_monthly.remote, config.trace_monthly.prefix, variable, entry.name)
+            temp_path = Path(config.cache_dir) / entry.name
+            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            jobs.append(
+                DownloadJob(
+                    kind="trace_monthly",
+                    variable=variable,
+                    entry=entry,
+                    metadata=metadata,
+                    remote_path=remote_path,
+                    temp_path=temp_path,
+                    output_path=out_path,
+                    nodata=config.trace_monthly.nodata_value,
                     force=force,
                 )
             )
@@ -491,4 +693,20 @@ def prepare_present_listing(config: GlobalConfig, logger) -> List[Dict[str, obje
     path = config.present.prefix.strip("/")
     remote_target = f"{config.present.remote}:{path}" if path else f"{config.present.remote}:"
     logger.info("Listing present remote %s", remote_target)
+    return list_remote(remote_target, recursive=True, config_path=config.rclone_config)
+
+
+def prepare_present_monthly_listing(config: GlobalConfig, logger) -> List[Dict[str, object]]:
+    """Prepare file listing for present-day monthly climatologies."""
+    path = config.present_monthly.prefix.strip("/")
+    remote_target = f"{config.present_monthly.remote}:{path}" if path else f"{config.present_monthly.remote}:"
+    logger.info("Listing present monthly remote %s", remote_target)
+    return list_remote(remote_target, recursive=True, config_path=config.rclone_config)
+
+
+def prepare_trace_monthly_listing(config: GlobalConfig, logger) -> List[Dict[str, object]]:
+    """Prepare file listing for TraCE21k monthly centennial data."""
+    path = config.trace_monthly.prefix.strip("/")
+    remote_target = f"{config.trace_monthly.remote}:{path}" if path else f"{config.trace_monthly.remote}:"
+    logger.info("Listing trace monthly remote %s", remote_target)
     return list_remote(remote_target, recursive=True, config_path=config.rclone_config)
