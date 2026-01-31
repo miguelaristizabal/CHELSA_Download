@@ -1,0 +1,12 @@
+CHELSA_tasmax_01_1981-2010_V.2.1.tif
+CHELSA_tasmax_02_1981-2010_V.2.1.tif
+CHELSA_tasmax_03_1981-2010_V.2.1.tif
+CHELSA_tasmax_04_1981-2010_V.2.1.tif
+CHELSA_tasmax_05_1981-2010_V.2.1.tif
+CHELSA_tasmax_06_1981-2010_V.2.1.tif
+CHELSA_tasmax_07_1981-2010_V.2.1.tif
+CHELSA_tasmax_08_1981-2010_V.2.1.tif
+CHELSA_tasmax_09_1981-2010_V.2.1.tif
+CHELSA_tasmax_10_1981-2010_V.2.1.tif
+CHELSA_tasmax_11_1981-2010_V.2.1.tif
+CHELSA_tasmax_12_1981-2010_V.2.1.tif

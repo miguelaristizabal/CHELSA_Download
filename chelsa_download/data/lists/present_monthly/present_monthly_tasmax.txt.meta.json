@@ -1,0 +1,113 @@
+{
+  "kind": "present_monthly",
+  "variable": "tasmax",
+  "files": [
+    {
+      "name": "CHELSA_tasmax_01_1981-2010_V.2.1.tif",
+      "size": 151136200,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_01_1981-2010_V.2.1.tif",
+      "month": 1
+    },
+    {
+      "name": "CHELSA_tasmax_02_1981-2010_V.2.1.tif",
+      "size": 153120470,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_02_1981-2010_V.2.1.tif",
+      "month": 2
+    },
+    {
+      "name": "CHELSA_tasmax_03_1981-2010_V.2.1.tif",
+      "size": 157082386,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_03_1981-2010_V.2.1.tif",
+      "month": 3
+    },
+    {
+      "name": "CHELSA_tasmax_04_1981-2010_V.2.1.tif",
+      "size": 161893420,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_04_1981-2010_V.2.1.tif",
+      "month": 4
+    },
+    {
+      "name": "CHELSA_tasmax_05_1981-2010_V.2.1.tif",
+      "size": 164624275,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_05_1981-2010_V.2.1.tif",
+      "month": 5
+    },
+    {
+      "name": "CHELSA_tasmax_06_1981-2010_V.2.1.tif",
+      "size": 167294959,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_06_1981-2010_V.2.1.tif",
+      "month": 6
+    },
+    {
+      "name": "CHELSA_tasmax_07_1981-2010_V.2.1.tif",
+      "size": 168533132,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_07_1981-2010_V.2.1.tif",
+      "month": 7
+    },
+    {
+      "name": "CHELSA_tasmax_08_1981-2010_V.2.1.tif",
+      "size": 167547785,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_08_1981-2010_V.2.1.tif",
+      "month": 8
+    },
+    {
+      "name": "CHELSA_tasmax_09_1981-2010_V.2.1.tif",
+      "size": 164584767,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_09_1981-2010_V.2.1.tif",
+      "month": 9
+    },
+    {
+      "name": "CHELSA_tasmax_10_1981-2010_V.2.1.tif",
+      "size": 157908174,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_10_1981-2010_V.2.1.tif",
+      "month": 10
+    },
+    {
+      "name": "CHELSA_tasmax_11_1981-2010_V.2.1.tif",
+      "size": 151389742,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_11_1981-2010_V.2.1.tif",
+      "month": 11
+    },
+    {
+      "name": "CHELSA_tasmax_12_1981-2010_V.2.1.tif",
+      "size": 150065010,
+      "time_id": null,
+      "path": "tasmax/1981-2010/CHELSA_tasmax_12_1981-2010_V.2.1.tif",
+      "month": 12
+    }
+  ],
+  "generated_at": "2026-01-31T03:24:06.678967",
+  "source": {
+    "type": "rclone"
+  },
+  "list_sha1": "492118cbd4a96d0719b15fe3eb194c5e667f5c50",
+  "stats": {
+    "count": 12,
+    "date_range": "1981-2010",
+    "months": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ]
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "kind": "present_monthly",
+  "variable": "tasmin",
+  "files": [
+    {
+      "name": "CHELSA_tasmin_01_1981-2010_V.2.1.tif",
+      "size": 153349823,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_01_1981-2010_V.2.1.tif",
+      "month": 1
+    },
+    {
+      "name": "CHELSA_tasmin_02_1981-2010_V.2.1.tif",
+      "size": 154981870,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_02_1981-2010_V.2.1.tif",
+      "month": 2
+    },
+    {
+      "name": "CHELSA_tasmin_03_1981-2010_V.2.1.tif",
+      "size": 158048772,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_03_1981-2010_V.2.1.tif",
+      "month": 3
+    },
+    {
+      "name": "CHELSA_tasmin_04_1981-2010_V.2.1.tif",
+      "size": 162183843,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_04_1981-2010_V.2.1.tif",
+      "month": 4
+    },
+    {
+      "name": "CHELSA_tasmin_05_1981-2010_V.2.1.tif",
+      "size": 163944504,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_05_1981-2010_V.2.1.tif",
+      "month": 5
+    },
+    {
+      "name": "CHELSA_tasmin_06_1981-2010_V.2.1.tif",
+      "size": 165718258,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_06_1981-2010_V.2.1.tif",
+      "month": 6
+    },
+    {
+      "name": "CHELSA_tasmin_07_1981-2010_V.2.1.tif",
+      "size": 167135473,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_07_1981-2010_V.2.1.tif",
+      "month": 7
+    },
+    {
+      "name": "CHELSA_tasmin_08_1981-2010_V.2.1.tif",
+      "size": 166616420,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_08_1981-2010_V.2.1.tif",
+      "month": 8
+    },
+    {
+      "name": "CHELSA_tasmin_09_1981-2010_V.2.1.tif",
+      "size": 165456375,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_09_1981-2010_V.2.1.tif",
+      "month": 9
+    },
+    {
+      "name": "CHELSA_tasmin_10_1981-2010_V.2.1.tif",
+      "size": 160392298,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_10_1981-2010_V.2.1.tif",
+      "month": 10
+    },
+    {
+      "name": "CHELSA_tasmin_11_1981-2010_V.2.1.tif",
+      "size": 154552213,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_11_1981-2010_V.2.1.tif",
+      "month": 11
+    },
+    {
+      "name": "CHELSA_tasmin_12_1981-2010_V.2.1.tif",
+      "size": 153037432,
+      "time_id": null,
+      "path": "tasmin/1981-2010/CHELSA_tasmin_12_1981-2010_V.2.1.tif",
+      "month": 12
+    }
+  ],
+  "generated_at": "2026-01-31T03:24:06.682971",
+  "source": {
+    "type": "rclone"
+  },
+  "list_sha1": "df3d168fd5b2ebd1161c265d3cf173e585811641",
+  "stats": {
+    "count": 12,
+    "date_range": "1981-2010",
+    "months": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ]
+  }
+}

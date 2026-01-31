@@ -1,0 +1,12 @@
+CHELSA_tasmin_01_1981-2010_V.2.1.tif
+CHELSA_tasmin_02_1981-2010_V.2.1.tif
+CHELSA_tasmin_03_1981-2010_V.2.1.tif
+CHELSA_tasmin_04_1981-2010_V.2.1.tif
+CHELSA_tasmin_05_1981-2010_V.2.1.tif
+CHELSA_tasmin_06_1981-2010_V.2.1.tif
+CHELSA_tasmin_07_1981-2010_V.2.1.tif
+CHELSA_tasmin_08_1981-2010_V.2.1.tif
+CHELSA_tasmin_09_1981-2010_V.2.1.tif
+CHELSA_tasmin_10_1981-2010_V.2.1.tif
+CHELSA_tasmin_11_1981-2010_V.2.1.tif
+CHELSA_tasmin_12_1981-2010_V.2.1.tif

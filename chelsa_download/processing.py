@@ -36,7 +36,7 @@ SourcePath = Union[str, Path]
 
 def clip_raster(source: SourcePath, aoi_gdf: gpd.GeoDataFrame):
     """Clip a raster to the AOI without applying scale/offset metadata."""
-    with rioxarray.open_rasterio(source, masked=True) as rds:
+    with rioxarray.open_rasterio(source, masked=True, mask_and_scale=False) as rds:
         clipped = rds.rio.clip(aoi_gdf.to_crs(rds.rio.crs).geometry, from_disk=True)
         if "band" in clipped.dims and clipped.sizes.get("band") == 1:
             clipped = clipped.squeeze("band", drop=True)
