@@ -171,7 +171,10 @@ output_dir = "./outputs/trace_monthly"
 nodata_value = -9999.0
 ```
 
-**Config resolution order:** `--config` flag → `CHELSA_DOWNLOAD_CONFIG` env var → `~/.chelsa-download.toml` → bundled defaults (with `--aoi`).
+**Config resolution order:**
+1. `--config` explicitly provided → use that TOML file
+2. `--aoi` provided (without `--config`) → use bundled defaults with that AOI
+3. Neither provided → auto-discover `CHELSA_DOWNLOAD_CONFIG` env var or `~/.chelsa-download.toml`, then prompt for AOI if neither exists
 
 ### AOI file
 

@@ -119,21 +119,32 @@ def main(
         return
     logger = setup_logging(verbose=verbose, quiet=quiet)
     cfg: GlobalConfig
-    try:
-        cfg = GlobalConfig.load(config)
-        if aoi:
-            cfg.aoi_path = aoi.expanduser().resolve()
-    except FileNotFoundError:
-        chosen_aoi = aoi
-        if chosen_aoi is None:
+
+    if config is not None:
+        # Explicit --config: always use that file
+        try:
+            cfg = GlobalConfig.load(config)
+            if aoi:
+                cfg.aoi_path = aoi.expanduser().resolve()
+        except FileNotFoundError:
+            raise typer.BadParameter(f"Config file not found: {config}")
+    elif aoi is not None:
+        # --aoi without --config: use bundled defaults (ignore any auto-discovered config)
+        cfg = GlobalConfig.default(aoi.expanduser().resolve())
+        logger.info("Using bundled defaults (lists: %s, outputs: %s)", cfg.lists_dir, cfg.present.output_dir.parent)
+    else:
+        # Neither --config nor --aoi: try auto-discover config, then prompt for AOI
+        try:
+            cfg = GlobalConfig.load(None)
+        except FileNotFoundError:
             prompt_value = typer.prompt(
-                "Config file not found. Enter the path to your AOI to use built-in defaults"
+                "No config file found. Enter the path to your AOI to use built-in defaults"
             ).strip()
             if not prompt_value:
                 raise typer.BadParameter("AOI path is required the first time you run the CLI without a config.")
             chosen_aoi = Path(prompt_value)
-        cfg = GlobalConfig.default(chosen_aoi.expanduser().resolve())
-        logger.info("Using bundled defaults (lists: %s, outputs: %s)", cfg.lists_dir, cfg.present.output_dir.parent)
+            cfg = GlobalConfig.default(chosen_aoi.expanduser().resolve())
+            logger.info("Using bundled defaults (lists: %s, outputs: %s)", cfg.lists_dir, cfg.present.output_dir.parent)
     
     # Override max_workers if provided
     if max_workers is not None:
