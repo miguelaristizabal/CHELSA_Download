@@ -99,7 +99,7 @@ rclone version
 3. **Unit normalization** — Raw CHELSA values (scaled integers in Kelvin, mm×10, etc.) are automatically converted to physical units (°C, mm) as float32. Derived variables `bio07` and `bio03` are recomputed from their dependencies when available.
 4. **Output** — Tiled, DEFLATE-compressed GeoTIFFs with `_AOI` appended to the filename, written to the configured output directory.
 
-On first launch, the CLI copies bundled assets (rclone config, file lists) to `~/.chelsa-download/` so everything works out of the box even when installed from PyPI.
+On first launch, the CLI copies bundled assets (rclone config, file lists) to `~/.chelsa-download/` so everything works out of the box even when installed with pip.
 
 ---
 
@@ -529,4 +529,4 @@ No credentials required — all buckets use anonymous access.
 
 ## License
 
-[MIT](LICENSE) — Copyright (c) 2025 Miguel Aristizabal
+[MIT](LICENSE)
