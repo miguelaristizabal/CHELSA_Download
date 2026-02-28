@@ -1,8 +1,8 @@
 # chelsa-download
 
-A Python CLI to efficiently download, clip, and normalize [CHELSA](https://www.chelsa-climate.org/) climate rasters for any Area of Interest (AOI). Supports both present-day bioclim climatologies (CHELSA v2.1, 1981–2010) and paleoclimate time series (CHELSA-TraCE21k, 20 ka BP to present), as well as monthly variables (pr, tasmin, tasmax).
+A Python CLI to efficiently download, clip, and normalize [CHELSA](https://www.chelsa-climate.org/) climate rasters for any Area of Interest (AOI). It currently upports both bioclim (bio01-bio19) and monthly (pr, tasmin, tasmax) variables for the present-day CHELSA v2.1 1981–2010 climatology and  the CHELSA-TraCE21k centennial paleoclimate time series (22 ka BP to present).
 
-Instead of pulling multi-GB global GeoTIFFs, `chelsa-download` uses cloud-optimized GeoTIFF (COG) windowed reads to fetch only the pixels you need — clipped to your AOI, converted to physical units, and written as analysis-ready float32 GeoTIFFs.
+Instead of pulling multi-GB global GeoTIFFs, `chelsa-download` works in parallel using cloud-optimized GeoTIFF (COG) windowed reads to fetch only the pixels you need, clipped to your AOI, converted to physical units, and written as analysis-ready float32 GeoTIFFs.
 
 ## Quick Start
 
@@ -25,12 +25,13 @@ pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/t
 ```
 
 ### 3. Download your first raster
+As an example, download the mean annual temperature (bio01) raster for your AOI polygon. Make sure to change the path to a real file.
 
 ```bash
-chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
+chelsa-download --aoi "path/to/AOI.geojson" download-present --var bio01 --limit 1
 ```
 
-That's it. The clipped raster lands in `outputs/present/` in your current directory, in physical units (°C), ready for analysis.
+That's it. The clipped raster lands in `outputs/present/` in your current directory, in physical units (°C for bio01), ready for analysis.
 
 ---
 
@@ -72,7 +73,7 @@ That's it. The clipped raster lands in `outputs/present/` in your current direct
 pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.4.1.tar.gz"
 ```
 
-Replace `0.4.1` with the desired release tag.
+Replace `v0.4.1` with the desired release tag if needed.
 
 ### Development install (from source)
 
@@ -101,10 +102,10 @@ rclone version
 
 ## How It Works
 
-1. **File lists** — The package ships with pre-generated `.txt` manifests (and `.meta.json` metadata) that list every file on the CHELSA remotes. These tell the CLI exactly what to download.
-2. **AOI clipping** — You supply a GeoJSON, GeoPackage, or Shapefile. The CLI reads only the COG tiles that overlap your AOI (via HTTP range requests), clips to the geometry, and fills masked pixels with nodata (`-9999`).
-3. **Unit normalization** — Raw CHELSA values (scaled integers in Kelvin, mm×10, etc.) are automatically converted to physical units (°C, mm) as float32. Derived variables `bio07` and `bio03` are recomputed from their dependencies when available.
-4. **Output** — Tiled, DEFLATE-compressed GeoTIFFs with a configurable suffix (default `_AOI`) appended to the filename, written to the configured output directory. The cache directory used for full downloads is automatically cleaned up after completion.
+1. **File lists**: the package ships with pre-generated metadata of the file structure of the cloud buckets where CHELSA rasters are stored. These quickly tell the CLI exactly what to download.
+2. **AOI clipping**: you supply a GeoJSON, GeoPackage, or Shapefile. The CLI reads only the COG tiles that overlap your AOI (via HTTP range requests), clips to the geometry, and fills masked pixels with nodata (`-9999`).
+3. **Unit normalization**: raw CHELSA rasters are stored with scaling/offset and units vary between the present and paleoclimate datasets. The CLI automatically converts the raster values to physical units (°C, mm, see below). Derived variables `bio07` and `bio03` are recomputed from their dependencies when available becasue of a suspected inconsistency in bio07 offset in CHELSA-TraCE21k.
+4. **Output**: tiled, DEFLATE-compressed GeoTIFFs with a configurable suffix (default `_AOI`) appended to the filename, written to the configured output directory. The cache directory used for full downloads is automatically cleaned up after completion.
 
 On first launch, the CLI copies bundled assets (rclone config, file lists) to `~/.chelsa-download/` so everything works out of the box even when installed with pip.
 
@@ -114,7 +115,7 @@ On first launch, the CLI copies bundled assets (rclone config, file lists) to `~
 
 ### Zero-config usage
 
-Just pass `--aoi` and the CLI handles everything else using bundled defaults:
+Just pass `--aoi` and the CLI handles everything else using bundled defaults. The following command will download all the variables available in the lists for CHELSA v2.1 1981–2010 climatologies:
 
 ```bash
 chelsa-download --aoi my_region.geojson download-present
@@ -122,7 +123,7 @@ chelsa-download --aoi my_region.geojson download-present
 
 ### TOML configuration file
 
-For full control, create a TOML config (see the bundled example):
+For full control, you can create a TOML config:
 
 ```bash
 cp chelsa-download.example.toml ~/.chelsa-download.toml
@@ -172,9 +173,9 @@ nodata_value = -9999.0
 ```
 
 **Config resolution order:**
-1. `--config` explicitly provided → use that TOML file
-2. `--aoi` provided (without `--config`) → use bundled defaults with that AOI
-3. Neither provided → auto-discover `CHELSA_DOWNLOAD_CONFIG` env var or `~/.chelsa-download.toml`, then prompt for AOI if neither exists
+1. If `--config` is explicitly provided, that TOML file is used.
+2. When `--aoi` is provided (without `--config`), the bundled defaults are used with that AOI.
+3. If neither is provided, the CLI tries to auto-discover a `CHELSA_DOWNLOAD_CONFIG` env var or `~/.chelsa-download.toml` failing and requesting an AOI if neither exists.
 
 ### AOI file
 
