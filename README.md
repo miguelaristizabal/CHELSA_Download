@@ -21,7 +21,7 @@ Verify: `rclone version`
 ### 2. Install chelsa-download
 
 ```bash
-pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.1.tar.gz"
 ```
 
 ### 3. Download your first raster
@@ -69,10 +69,10 @@ That's it. The clipped raster lands in `outputs/present/` in your current direct
 ### From GitHub release (recommended)
 
 ```bash
-pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.1.tar.gz"
 ```
 
-Replace `0.4.0` with the desired release tag.
+Replace `0.4.1` with the desired release tag.
 
 ### Development install (from source)
 
