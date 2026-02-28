@@ -527,6 +527,24 @@ No credentials required — all buckets use anonymous access.
 
 ---
 
+## Citations
+
+If you use CHELSA data in your work, please cite the original datasets and papers:
+
+### CHELSA v2.1 (present-day climatologies)
+
+Karger, D. N., Conrad, O., Böhner, J., Kawohl, T., Kreft, H., Soria-Auza, R. W., Zimmermann, N. E., Linder, H. P., & Kessler, M. (2017). Climatologies at high resolution for the earth's land surface areas. *Scientific Data, 4*(1), 170122. [https://doi.org/10.1038/sdata.2017.122](https://doi.org/10.1038/sdata.2017.122)
+
+Karger, D. N., Conrad, O., Böhner, J., Kawohl, T., Kreft, H., Soria-Auza, R. W., Zimmermann, N. E., Linder, H. P., & Kessler, M. (2021). Climatologies at high resolution for the earth's land surface areas [Dataset]. *EnviDat*. [https://doi.org/10.16904/envidat.228](https://doi.org/10.16904/envidat.228)
+
+### CHELSA-TraCE21k (paleoclimate)
+
+Karger, D. N., Nobis, M. P., Normand, S., Graham, C. H., & Zimmermann, N. E. (2023). CHELSA-TraCE21k – high-resolution (1 km) downscaled transient temperature and precipitation data since the Last Glacial Maximum. *Climate of the Past, 19*(2), 439–456. [https://doi.org/10.5194/cp-19-439-2023](https://doi.org/10.5194/cp-19-439-2023)
+
+Karger, D. N., Nobis, M. P., Normand, S., Graham, C. H., & Zimmermann, N. E. (2020). CHELSA-TraCE21k: Downscaled transient temperature and precipitation data since the last glacial maximum [Dataset]. *EnviDat*. [https://doi.org/10.16904/envidat.211](https://doi.org/10.16904/envidat.211)
+
+---
+
 ## License
 
 [MIT](LICENSE)
