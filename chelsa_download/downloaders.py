@@ -165,6 +165,9 @@ def collect_trace_jobs(
     config: GlobalConfig,
     manager: ListManager,
     vars_filter: Optional[List[str]] = None,
+    time_slice: Optional[List[int]] = None,
+    time_range: Optional[tuple[int, int]] = None,
+    time_interval: Optional[int] = None,
     limit: Optional[int] = None,
     force: bool = False,
 ) -> List[DownloadJob]:
@@ -181,10 +184,12 @@ def collect_trace_jobs(
         if selected_vars and variable.lower() not in selected_vars:
             continue
         metadata = manager.load_metadata(list_path)
+        # Filter by time slice
+        filtered_entries = filter_by_time_slice(metadata.files, time_slice, time_range, time_interval)
         subdir = trace_remote_subdir(variable)
         out_dir = Path(config.trace.output_dir) / variable
         out_dir.mkdir(parents=True, exist_ok=True)
-        for entry in metadata.files:
+        for entry in filtered_entries:
             if entry.path:
                 joined = "/".join(
                     part
@@ -198,7 +203,7 @@ def collect_trace_jobs(
             else:
                 remote_path = build_remote_path(config.trace.remote, config.trace.prefix, subdir, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
-            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            out_path = out_dir / entry.name.replace(".tif", f"{config.suffix}.tif")
             jobs.append(
                 DownloadJob(
                     kind="trace",
@@ -254,7 +259,7 @@ def collect_present_jobs(
             else:
                 remote_path = build_remote_path(config.present.remote, config.present.prefix, subdir, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
-            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            out_path = out_dir / entry.name.replace(".tif", f"{config.suffix}.tif")
             jobs.append(
                 DownloadJob(
                     kind="present",
@@ -318,7 +323,7 @@ def collect_present_monthly_jobs(
             else:
                 remote_path = build_remote_path(config.present_monthly.remote, config.present_monthly.prefix, variable, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
-            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            out_path = out_dir / entry.name.replace(".tif", f"{config.suffix}.tif")
             jobs.append(
                 DownloadJob(
                     kind="present_monthly",
@@ -386,7 +391,7 @@ def collect_trace_monthly_jobs(
             else:
                 remote_path = build_remote_path(config.trace_monthly.remote, config.trace_monthly.prefix, variable, entry.name)
             temp_path = Path(config.cache_dir) / entry.name
-            out_path = out_dir / entry.name.replace(".tif", "_AOI.tif")
+            out_path = out_dir / entry.name.replace(".tif", f"{config.suffix}.tif")
             jobs.append(
                 DownloadJob(
                     kind="trace_monthly",
@@ -425,6 +430,8 @@ def _download_one(job: DownloadJob, config: GlobalConfig) -> tuple[str, int, boo
     if job.output_path.exists() and not job.force:
         return f"Skipped (exists): {job.output_path.name}", 0, True
 
+    # Ensure cache directory exists (may not have been created in windowed mode)
+    job.temp_path.parent.mkdir(parents=True, exist_ok=True)
     copy_to(job.remote_path, job.temp_path, config_path=config.rclone_config, retries=3)
     size_on_disk = job.temp_path.stat().st_size
     if job.entry.size and size_on_disk != job.entry.size:
@@ -497,7 +504,8 @@ def execute_jobs(
         return {"processed": 0, "skipped": 0, "failed": 0}
 
     cache_dir = Path(config.cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    if not windowed:
+        cache_dir.mkdir(parents=True, exist_ok=True)
     aoi = load_aoi(Path(config.aoi_path))
     summary = {"processed": 0, "skipped": 0, "failed": 0}
 
@@ -574,6 +582,15 @@ def execute_jobs(
     if unit_normalize:
         _recompute_derived_outputs(job_list, config, logger, recompute_bio07_flag, recompute_bio03_flag)
 
+    # Clean up cache directory after all jobs complete
+    if cache_dir.exists():
+        import shutil
+        try:
+            shutil.rmtree(cache_dir)
+            logger.debug("Cleaned up cache directory: %s", cache_dir)
+        except OSError as exc:
+            logger.debug("Could not fully remove cache directory %s: %s", cache_dir, exc)
+
     return summary
 
 
@@ -582,7 +599,7 @@ def _replace_bio_var(filename: str, new_var: str) -> str:
 
 
 def _dependency_output_path(job: DownloadJob, dep_var: str, config: GlobalConfig) -> Path:
-    filename = _replace_bio_var(job.entry.name, dep_var).replace(".tif", "_AOI.tif")
+    filename = _replace_bio_var(job.entry.name, dep_var).replace(".tif", f"{config.suffix}.tif")
     if job.kind == "trace":
         out_dir = Path(config.trace.output_dir) / dep_var
     else:

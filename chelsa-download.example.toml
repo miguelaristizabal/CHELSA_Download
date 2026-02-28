@@ -9,6 +9,7 @@ config = "./envicloud.conf"
 
 [downloads]
 max_workers = 6
+suffix = "_AOI"
 
 [trace]
 remote = "chelsa01_trace21k_bioclim"

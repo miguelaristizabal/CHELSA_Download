@@ -107,9 +107,16 @@ def main(
         "--max-workers",
         help="Number of parallel download/processing workers. Higher values speed up downloads but increase memory usage. Default is 6 (or value from config).",
     ),
+    suffix: Optional[str] = typer.Option(
+        None,
+        "--suffix",
+        help="Suffix appended to output filenames (default: '_AOI'). Use --suffix _myregion to customize.",
+    ),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress informational messages. Only warnings and errors will be shown."),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable detailed debug logging for troubleshooting."),
 ):
+    if ctx.resilient_parsing:
+        return
     logger = setup_logging(verbose=verbose, quiet=quiet)
     cfg: GlobalConfig
     try:
@@ -132,6 +139,11 @@ def main(
     if max_workers is not None:
         cfg.max_workers = max_workers
         logger.debug("Overriding max_workers to %d", max_workers)
+
+    # Override suffix if provided
+    if suffix is not None:
+        cfg.suffix = suffix
+        logger.debug("Overriding output suffix to '%s'", suffix)
     
     ctx.obj = AppContext(cfg, logger, ListManager(cfg))
     logger.debug("Loaded configuration: %s", cfg.to_dict())
@@ -192,6 +204,9 @@ def prepare_lists(
 def download_trace(
     ctx: typer.Context,
     variable: List[str] = typer.Option(None, "--var", "-v", help="Filter downloads to specific variables (e.g., --var bio01 --var bio12). Can be specified multiple times. If omitted, all available variables are downloaded."),
+    time_slice: List[int] = typer.Option(None, "--time-slice", "-t", help="Filter downloads to specific time slices in years BP (e.g., --time-slice -200 --time-slice 0). Range: -200 to 20. Can be specified multiple times. If omitted along with --time-range, all available time slices are downloaded."),
+    time_range: Optional[str] = typer.Option(None, "--time-range", help="Filter downloads to a range of time slices (format: start-end, e.g., --time-range -200--100). Inclusive range in years BP."),
+    time_interval: Optional[int] = typer.Option(None, "--time-interval", help="Step size when using --time-range (e.g., --time-range -200-0 --time-interval 10 downloads every 10th time slice). Must be positive."),
     limit: Optional[int] = typer.Option(None, "--limit", help="Limit processing to the first N files (useful for testing). If not specified, all matching files will be processed."),
     force: bool = typer.Option(False, "--force", help="Force re-download and overwrite existing output files, even if they already exist."),
     max_workers: Optional[int] = typer.Option(None, "--max-workers", help="Number of parallel workers for this specific command. Overrides global --max-workers and config file settings."),
@@ -208,7 +223,24 @@ def download_trace(
 ):
     """Download and clip CHELSA-TraCE21k paleoclimate rasters for your AOI."""
     context = _get_context(ctx)
-    jobs = collect_trace_jobs(context.config, context.manager, vars_filter=variable or None, limit=limit, force=force)
+    time_range_tuple = None
+    if time_range:
+        try:
+            start, end = map(int, time_range.split("-"))
+            time_range_tuple = (start, end)
+        except ValueError:
+            context.logger.error("Invalid --time-range format. Use: start-end (e.g., -200--100)")
+            raise typer.Exit(code=1)
+    jobs = collect_trace_jobs(
+        context.config,
+        context.manager,
+        vars_filter=variable or None,
+        time_slice=time_slice or None,
+        time_range=time_range_tuple,
+        time_interval=time_interval,
+        limit=limit,
+        force=force,
+    )
     _print_plan(context, jobs, windowed, unit_normalize)
     summary = execute_jobs(
         jobs,
