@@ -203,8 +203,6 @@ These apply to **all** commands and must appear before the subcommand name.
 | `--verbose` | `-v` | flag | `False` | Enable debug logging. |
 | `--help` | | | | Show help and exit. |
 
-> **Note:** `--aoi` is not required for viewing help. You can run `chelsa-download --help` or `chelsa-download download-present --help` without providing an AOI.
-
 ---
 
 ### `download-present`
@@ -224,7 +222,7 @@ chelsa-download --aoi region.geojson download-present [OPTIONS]
 | `--windowed` / `--no-windowed` | | | `--windowed` | Use COG windowed HTTP reads (default) or force full-file downloads. |
 | `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Convert to physical units (default) or keep raw GeoTIFF values. |
 
-**Available variables:** `bio01`–`bio19`, `scd`
+**Available variables in bundled lists:** `bio01`-`bio19`, `scd`
 
 **Examples:**
 
@@ -248,7 +246,20 @@ chelsa-download --aoi aoi.geojson download-present --force
 
 ### `download-trace`
 
-Download and clip **CHELSA-TraCE21k paleoclimate bioclim** rasters for your AOI. These cover 20,000 years of centennial bioclimatic variables.
+Download and clip **CHELSA-TraCE21k centennial bioclim** rasters for your AOI. These cover 22,000 years of centennial bioclimatic variables.
+
+#### Understanding Time Slices ($T$)
+
+The centennial data is divided into 221 available time slices. Each file is indexed by a specific time step, denoted as $T$.
+
+* $T$ is an integer ranging from `[-200, 20]`, including `0`.
+* **$T = 20$** represents **0 ka BP** (kilo-annum Before Present, meaning ~1950 CE).
+* **$T = -200$** represents **22 ka BP** (22,000 years Before Present).
+
+**Conversion Formula:**
+To convert the time index $T$ found in the filenames to thousands of years Before Present (ka BP), you can use the following formula:
+
+ka BP $= (20 - T) / 10$
 
 ```bash
 chelsa-download --aoi region.geojson download-trace [OPTIONS]
@@ -257,7 +268,7 @@ chelsa-download --aoi region.geojson download-trace [OPTIONS]
 | Option | Short | Type | Default | Description |
 |---|---|---|---|---|
 | `--var` | `-v` | text (repeatable) | all | Filter to specific variables (e.g. `--var bio01`). |
-| `--time-slice` | `-t` | int (repeatable) | all | Specific time slices in years BP (e.g. `--time-slice -200 --time-slice 0`). Range: -200 to 20. |
+| `--time-slice` | `-t` | int (repeatable) | all | Specific time slices  (e.g. `--time-slice -200 --time-slice 0`). |
 | `--time-range` | | text | all | Inclusive time range (e.g. `--time-range -200--100`). |
 | `--time-interval` | | int | `None` | Step size within `--time-range` (e.g. `--time-interval 10` for every 10th slice). Must be positive. |
 | `--limit` | | int | all | Process only the first N files. |
@@ -266,9 +277,7 @@ chelsa-download --aoi region.geojson download-trace [OPTIONS]
 | `--windowed` / `--no-windowed` | | | `--windowed` | Windowed COG reads (default) or full downloads. |
 | `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Physical unit conversion (default) or raw values. |
 
-**Available variables:** `bio01`–`bio19`, `glz`, `orog`, `scd`, and others from the TraCE21k archive.
-
-**Time coverage:** -200 to 20 years BP (Before Present, where 0 = 1950 CE) in centennial steps.
+**Available variables in bundled lists:** `bio01`-`bio19`, `glz`, `orog`, `scd`.
 
 **Examples:**
 
@@ -333,7 +342,7 @@ chelsa-download --aoi aoi.geojson download-present-monthly --var tasmin --var ta
 
 ### `download-trace-monthly`
 
-Download and clip **CHELSA-TraCE21k monthly centennial** data for your AOI. Covers -200 to 20 years BP in centennial steps, with 12 months per time slice.
+Download and clip **CHELSA-TraCE21k monthly centennial** data for your AOI. Same 221 centennial steps, with 12 months per time slice.
 
 ```bash
 chelsa-download --aoi region.geojson download-trace-monthly [OPTIONS]
@@ -354,8 +363,6 @@ chelsa-download --aoi region.geojson download-trace-monthly [OPTIONS]
 | `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Physical unit conversion or raw values. |
 
 **Available variables:** `pr` (precipitation, mm/month), `tasmin` (minimum temperature, °C), `tasmax` (maximum temperature, °C)
-
-**Time coverage:** -200 to 20 years BP (Before Present, where 0 = 1950 CE) in centennial steps.
 
 **Examples:**
 
@@ -380,6 +387,7 @@ chelsa-download --aoi aoi.geojson download-trace-monthly --var tasmin --time-sli
 ### `prepare-lists`
 
 Generate the `.txt` file lists and `.meta.json` metadata files that the download commands consume. The package ships with pre-generated lists, so you only need this if the CHELSA buckets change or you want to refresh.
+If you do, be patient because it takes a while!
 
 ```bash
 chelsa-download prepare-lists [OPTIONS]
@@ -419,17 +427,17 @@ chelsa-download prepare-lists --kind trace_monthly
 
 ### Why unit normalization matters
 
-CHELSA v2.1 (present-day) and CHELSA-TraCE21k (paleoclimate) store bioclimatic variables in **different raw encodings**. Both datasets use scaled integers to save space, but the scale factors and offsets are not always the same between versions. Without normalization, combining present-day and paleoclimate rasters in a single analysis would produce incorrect results because the same raw integer means different things in each dataset.
+CHELSA v2.1 (present-day) and CHELSA-TraCE21k (paleoclimate) store bioclimatic variables **differently**. The scale factors and offsets are not always the same between versions, namely because CHELSA-TraCE21k uses Kelvin for temperatures instead of degrees Celsius. Without normalization, combining present-day and paleoclimate rasters in a single analysis would produce incorrect results due to unit mismatches, and conversion is not trivial because some bioclim variables are ranges, ratios or standard deviations.
 
-By default, `chelsa-download` converts all outputs to **float32 in physical units** (°C for temperature, mm or kg m⁻² for precipitation) and strips GeoTIFF scale/offset metadata tags. This ensures that present-day and TraCE21k rasters are directly interoperable — you can stack, compare, or feed them into models without worrying about encoding differences.
+By default, `chelsa-download` converts all outputs to physical units (°C for temperature, mm or equivalently kg m⁻² for precipitation) and strips GeoTIFF scale/offset metadata tags. This ensures that present-day and TraCE21k rasters are directly interoperable. You can stack, compare, or feed them into models without worrying about encoding differences.
 
-Additionally, CHELSA-TraCE21k has suspected inconsistencies in its `bio07` (temperature annual range) values. Rather than trusting the raw `bio07` field, the tool recomputes it from `bio05 − bio06` whenever those dependencies are available, producing more reliable results.
+Additionally, users should note an apparent anomaly in the CHELSA-TraCE21k `bio07` (temperature annual range) values, which appear to include an extra +273.15 K offset. Because this puts the raw values outside the typical physical range for a relative temperature difference, chelsa-download automatically recomputes `bio07` as `bio05 − bio06` whenever those variables are also being downloaded. This ensures the outputs remain physically realistic and directly comparable to present-day data.
 
-All outputs are written as float32 GeoTIFFs with nodata = -9999.
+All outputs are written as float32 GeoTIFFs with nodata = -9999, but this value can be modified in the config.
 
 ### CHELSA v2.1 (present-day) bioclim conversions
 
-Raw values in CHELSA v2.1 are stored as scaled integers: temperatures in Kelvin × 10, precipitation in kg m⁻² (or × 0.1).
+Raw values in CHELSA v2.1 are stored with scaling/offset: temperatures in Kelvin × 10, precipitation in kg m⁻² (or × 0.1).
 
 | Variable | Description | Units | Conversion |
 |---|---|---|---|
@@ -483,7 +491,7 @@ When all dependencies are present in the same download batch, `bio07` and `bio03
 
 Recomputation is triggered automatically when you download `bio05`, `bio06`, and `bio07` together (or `bio02`, `bio07`, and `bio03` together). If dependencies are missing, the tool falls back to the per-variable raw conversion with a logged warning.
 
-Use `--no-unit-normalize` to skip all conversions and write raw integer values.
+Use `--no-unit-normalize` to skip all conversions and write raw values with scale/offset metadata.
 
 ---
 
@@ -504,7 +512,7 @@ CHELSA GeoTIFFs are cloud-optimized (tiled + overviews). By default, the CLI res
 
 ### Benchmark
 
-Using `scripts/benchmark_windowed.py` with a ~10°×10° AOI:
+Using `scripts/benchmark_windowed.py` with a ~10°×10° AOI you can see that windowed downloads are wayyy faster:
 
 | Dataset | Remote file size | Windowed time | Full download time | Speedup |
 |---|---|---|---|---|
@@ -529,11 +537,11 @@ The CLI uses `.txt` + `.meta.json` pairs to know exactly which files exist, thei
 
 ## Tips for Large Downloads
 
-- **Cache behavior:** In windowed mode (default), no cache directory is created. In `--no-windowed` mode, `chelsa_cache/` is used as scratch space but is automatically deleted after all jobs complete. Keep the cache on an SSD — each raw GeoTIFF can be 0.5–2 GB.
-- **Parallelism:** Tune `--max-workers` to match your network throughput. Default is 6.
-- **List freshness:** If the CHELSA bucket changes, regenerate lists with `prepare-lists` so metadata hashes match.
-- **AOI CRS:** If your AOI file lacks a CRS, WGS 84 (EPSG:4326) is assumed. Set it explicitly in your GIS software to avoid surprises.
-- **Resume:** If downloads stop mid-way, simply rerun the command — existing outputs are skipped unless `--force` is used.
+- **Cache behavior:** in windowed mode (default), no cache directory is created. In `--no-windowed` mode, `chelsa_cache/` is used as scratch space but is automatically deleted after all jobs complete. Keep the cache on an SSD, each raw GeoTIFF can be 0.5–2 GB.
+- **Parallelism:** tune `--max-workers` to match your network throughput. Default is 6.
+- **List freshness:** if the CHELSA bucket changes, regenerate lists with `prepare-lists` so metadata hashes match.
+- **AOI CRS:** if your AOI file lacks a CRS, WGS 84 (EPSG:4326) is assumed. Set it explicitly in your GIS software to avoid surprises.
+- **Resume:** if downloads stop mid-way, simply rerun the command, existing outputs are skipped unless `--force` is used.
 
 ---
 
@@ -580,7 +588,7 @@ No credentials required — all buckets use anonymous access.
 
 ## Related Tools
 
-- **[rchelsa](https://gitlabext.wsl.ch/karger/rchelsa)** — An R package by the CHELSA team for accessing CHELSA data directly from R. If you work primarily in R, check it out.
+- **[rchelsa](https://gitlabext.wsl.ch/karger/rchelsa)** - An R package by the CHELSA team for accessing CHELSA data directly from R. If you work primarily in R, check it out.
 
 ---
 
