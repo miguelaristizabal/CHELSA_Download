@@ -1,262 +1,532 @@
-## CHELSA Download CLI
+# chelsa-download
 
-A Python CLI to efficiently download present and past bioclim rasters from [CHELSA](https://www.chelsa-climate.org/) only for a region of your choosing.
+A Python CLI to efficiently download, clip, and normalize [CHELSA](https://www.chelsa-climate.org/) climate rasters for any Area of Interest (AOI). Supports both present-day bioclim climatologies (CHELSA v2.1, 1981–2010) and paleoclimate time series (CHELSA-TraCE21k, 20 ka BP to present), as well as monthly variables (pr, tasmin, tasmax).
 
-CHELSA distributes global GeoTIFFs in public cloud buckets. Pulling those multi‑GB rasters every time you need a small Area of Interest (AOI) is wasteful, especially for the massive TraCE21k archive. `chelsa-download` bundles rclone remotes, curated file lists, and an AOI-first download pipeline so that you only fetch, clip, and keep what you actually need.
+Instead of pulling multi-GB global GeoTIFFs, `chelsa-download` uses cloud-optimized GeoTIFF (COG) windowed reads to fetch only the pixels you need — clipped to your AOI, converted to physical units, and written as analysis-ready float32 GeoTIFFs.
 
----
+## Quick Start
 
-### Quick start
+### 1. Install rclone
 
-
-#### 1) (Recommended) create and activate a virtual environment
-```bash
-python -m venv .venv
-```
-##### macOS/Linux
-```bash
-source .venv/bin/activate
-```
-##### Windows PowerShell
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-#### 2) Ensure Python and rclone are available
-- If you do not yet have Python installed, see the [prerequisites](#prerequisites--recommended-setup) section.
-> **Install rclone (required for downloads):**
-##### Windows
+**Windows:**
 ```powershell
 winget install Rclone.Rclone
 ```
- ##### macOS/Linux
+**macOS / Linux:**
 ```bash
 sudo -v ; curl https://rclone.org/install.sh | sudo bash
 ```
-  - Verify: `rclone version`
+Verify: `rclone version`
 
-#### 3) Install CHELSA_Download v.3 from the GitHub tag tarball
+### 2. Install chelsa-download
+
 ```bash
-python -m pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
 ```
-#### 4) Run your first download (uses bundled lists and default remotes)
+
+### 3. Download your first raster
+
 ```bash
 chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
 ```
 
-This uses the pre generated lists bundled with the package, the envicloud rclone remotes, and writes clipped rasters to `outputs/present` in the current working directory. By default, the CLI uses windowed COG reads (HTTP range requests) to avoid full downloads and **normalizes all outputs to physical units** (no GeoTIFF scale/offset tags). Use `--no-windowed` for full downloads or `--no-unit-normalize` for raw debugging.
+That's it. The clipped raster lands in `outputs/present/` in your current directory, in physical units (°C), ready for analysis.
 
-To install a different version, replace `v0.4.0` in the URL with the tag you want.
+---
 
-#### Development install (from source)
+## Table of Contents
+
+- [Installation](#installation)
+- [How It Works](#how-it-works)
+- [Configuration](#configuration)
+- [CLI Reference](#cli-reference)
+  - [Global Options](#global-options)
+  - [download-present](#download-present)
+  - [download-trace](#download-trace)
+  - [download-present-monthly](#download-present-monthly)
+  - [download-trace-monthly](#download-trace-monthly)
+  - [prepare-lists](#prepare-lists)
+- [Variables & Units](#variables--units)
+- [Windowed COG Reads](#windowed-cog-reads)
+- [Generating File Lists](#generating-file-lists)
+- [Tips for Large Downloads](#tips-for-large-downloads)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
+## Installation
+
+**Requirements:** Python 3.10+ and [rclone](https://rclone.org/install/).
+
+### From GitHub release (recommended)
 
 ```bash
-# 1) Clone and enter the project
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/0.4.0.tar.gz"
+```
+
+Replace `0.4.0` with the desired release tag.
+
+### Development install (from source)
+
+```bash
 git clone https://github.com/miguelaristizabal/CHELSA_Download.git
 cd CHELSA_Download
-
-# 2) Create and activate a virtual environment
 python -m venv .venv
-# macOS/Linux
+
+# Activate the virtual environment
+# macOS/Linux:
 source .venv/bin/activate
-# Windows PowerShell
+# Windows PowerShell:
 .venv\Scripts\Activate.ps1
 
-# 3) Install the CLI (plus dev extras if you plan to hack on it)
-python -m pip install -e .[dev]
-
-# 4) (Optional) Copy and edit the sample config, or supply --aoi later
-cp chelsa-download.example.toml ~/.chelsa-download.toml
-
-# 5) Run your first download (uses bundled lists and default remotes)
-chelsa-download --aoi path/to/AOI.geojson download-present --var bio01 --limit 1
+pip install -e .[dev]
 ```
----
 
-### Why this tool?
+### Verify installation
 
-- **Pre-baked remotes & lists.** The repo ships with `envicloud.conf` and `lists/` so you can run downloads immediately. If the included lists are out of date, regenerate them later with `prepare-lists`. See the official dataset pages for bucket links & variable descriptions: [CHELSA-TraCE21k bioclim](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim) and [CHELSA Bioclim+](https://www.chelsa-climate.org/datasets/chelsa_bioclim).
-- **AOI-centric downloads.** By default the CLI reads only the needed COG tiles over HTTP, clips to your AOI, fills masked cells with the declared nodata, and writes just the AOI raster in physical units (float32). Use `--no-windowed` to force full downloads and cache files.
-- **Resilient transfers.** rclone copy/retry logic is wrapped in a reusable helper. Cache files allow resuming long downloads without redownloading everything.
-- **Structured logging & progress.** A single Rich progress bar shows total files, cumulative download size, and live transfer speeds, while the logger records per-file results.
-
----
-
-### Prerequisites & recommended setup
-
-1. **Python 3.10+**
-   - macOS/Linux: `python3 --version`, install via [python.org](https://www.python.org/downloads/) or `brew install python`.
-   - Windows: [Download the official installer](https://www.python.org/downloads/windows/) and enable "Add python.exe to PATH".
-   - Preferred Conda path: install [Miniforge](https://conda-forge.org/miniforge/) (optimized for conda-forge) and create an env: `conda create -n chelsa python=3.11 && conda activate chelsa`.
-   - Or create a venv: `python -m venv .venv && source .venv/bin/activate` (Linux/macOS) or `.venv\Scripts\Activate.ps1` (PowerShell).
-
-     _If you already have your own Python setup, stick with that!_
-
-2. **rclone**
-   - Windows: `winget install Rclone.Rclone`
-   - macOS/Linux: `sudo -v ; curl https://rclone.org/install.sh | sudo bash`
-   - Verify: `rclone version`
-   - The bundled `envicloud.conf` already contains anonymous remotes for CHELSA v2.1 (`chelsa02_bioclim`) and TraCE21k (`chelsa01_trace21k_bioclim`).
-
-3. **AOI geometry**
-   - Supply a GeoJSON/GeoPackage/Shapefile readable by GeoPandas.
-   - To try downloading with the default config, just pass `--aoi path/to/aoi.geojson` the first time you run the CLI.
+```bash
+chelsa-download --help
+rclone version
+```
 
 ---
 
-### Configure the tool
+## How It Works
 
-You can run entirely from the built-in defaults (just pass `--aoi path/to/aoi`). On first launch the CLI copies the bundled lists/config into `~/.chelsa-download/` so you get a writable workspace even when installing from PyPI or a GitHub release. For more control, copy the sample TOML and tweak the paths—everything is relative to the project directory by default.
+1. **File lists** — The package ships with pre-generated `.txt` manifests (and `.meta.json` metadata) that list every file on the CHELSA remotes. These tell the CLI exactly what to download.
+2. **AOI clipping** — You supply a GeoJSON, GeoPackage, or Shapefile. The CLI reads only the COG tiles that overlap your AOI (via HTTP range requests), clips to the geometry, and fills masked pixels with nodata (`-9999`).
+3. **Unit normalization** — Raw CHELSA values (scaled integers in Kelvin, mm×10, etc.) are automatically converted to physical units (°C, mm) as float32. Derived variables `bio07` and `bio03` are recomputed from their dependencies when available.
+4. **Output** — Tiled, DEFLATE-compressed GeoTIFFs with `_AOI` appended to the filename, written to the configured output directory.
+
+On first launch, the CLI copies bundled assets (rclone config, file lists) to `~/.chelsa-download/` so everything works out of the box even when installed from PyPI.
+
+---
+
+## Configuration
+
+### Zero-config usage
+
+Just pass `--aoi` and the CLI handles everything else using bundled defaults:
+
+```bash
+chelsa-download --aoi my_region.geojson download-present
+```
+
+### TOML configuration file
+
+For full control, create a TOML config (see the bundled example):
+
+```bash
+cp chelsa-download.example.toml ~/.chelsa-download.toml
+```
 
 ```toml
 [paths]
-aoi = "./AOI.geojson"                     # user-provided AOI when not using --aoi
-lists_dir = "./lists"                     # defaults copied to ~/.chelsa-download/lists
-cache_dir = "./chelsa_cache"              # SSD scratch space
+aoi = "./AOI.geojson"                   # default AOI when --aoi is not passed
+lists_dir = "./lists"                   # directory containing .txt file lists
+cache_dir = "./chelsa_cache"            # scratch space for full downloads
 trace_filelist_json = "./lists/raw/chelsatrace_filelist.json"
 
 [rclone]
-config = "./envicloud.conf"               # provided remotes (envicloud S3)
+config = "./envicloud.conf"             # rclone remote definitions
+
+[downloads]
+max_workers = 6                         # parallel workers
 
 [present]
 remote = "chelsa02_bioclim"
+prefix = ""
 lists_subdir = "present"
-output_dir = "./outputs/present"          # AOI-clipped present-day GeoTIFFs
+output_dir = "./outputs/present"
+nodata_value = -9999.0
 
 [trace]
 remote = "chelsa01_trace21k_bioclim"
+prefix = ""
 lists_subdir = "."
-output_dir = "./outputs/trace"            # AOI-clipped TraCE21k GeoTIFFs
+output_dir = "./outputs/trace"
+nodata_value = -9999.0
+
+[present_monthly]
+remote = "chelsa02_climatologies"
+prefix = ""
+lists_subdir = "present_monthly"
+output_dir = "./outputs/present_monthly"
+nodata_value = -9999.0
+
+[trace_monthly]
+remote = "chelsa01_trace_centennial"
+prefix = ""
+lists_subdir = "trace_monthly"
+output_dir = "./outputs/trace_monthly"
+nodata_value = -9999.0
 ```
 
-Clipped rasters land in the `output_dir` for each section with `_AOI` appended to the filename.
+**Config resolution order:** `--config` flag → `CHELSA_DOWNLOAD_CONFIG` env var → `~/.chelsa-download.toml` → bundled defaults (with `--aoi`).
+
+### AOI file
+
+Supply any geometry file readable by GeoPandas (GeoJSON, GeoPackage, Shapefile with all sidecar files). If the file has no CRS, WGS 84 (EPSG:4326) is assumed.
 
 ---
 
-### Generate file lists
+## CLI Reference
 
-The CLI uses `.txt` + `.meta.json` pairs to know exactly which files exist, their sizes, and time ranges. The repo already ships with a set from 14-Nov-2025, but here’s how to regenerate them:
+```
+chelsa-download [GLOBAL OPTIONS] COMMAND [COMMAND OPTIONS]
+```
 
-| Step | Command | Files created | Location | Notes |
-| --- | --- | --- | --- | --- |
-| 1 | `rclone lsjson chelsa01_trace21k_bioclim: --recursive > lists/raw/chelsatrace_filelist.json` | `chelsatrace_filelist.json` | `lists/raw/` | ~30–60 MB JSON snapshot |
-| 2 | `chelsa-download prepare-lists --kind trace --source-json lists/raw/chelsatrace_filelist.json` | `trace_*.txt` + `.meta.json` | `lists/` | Sorted chronologically with SHA-1 digests |
-| 3 | `chelsa-download prepare-lists --kind present` | `present_*.txt` + `.meta.json` | `lists/present/` | Uses live `rclone lsjson` via `chelsa02_bioclim` |
+### Global Options
 
-Expect a few minutes for the TraCE21k snapshot and less than a minute for the present-day listing. Disk usage is modest (<100 MB total).
+These apply to **all** commands and must appear before the subcommand name.
+
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--config` | `-c` | Path | `None` | Path to a TOML configuration file. Falls back to env var `CHELSA_DOWNLOAD_CONFIG`, then `~/.chelsa-download.toml`, then bundled defaults. |
+| `--aoi` | | Path | `None` | Path to AOI geometry file (GeoJSON, GeoPackage, Shapefile). Required when no config file provides one. |
+| `--max-workers` | | int | `6` | Number of parallel download/processing workers. |
+| `--quiet` | | flag | `False` | Suppress informational messages. Only warnings and errors are shown. |
+| `--verbose` | `-v` | flag | `False` | Enable debug logging. |
+| `--help` | | | | Show help and exit. |
 
 ---
 
-### Downloading data
+### `download-present`
 
-Each download command consumes the list metadata, clips to your AOI, fills nodata (-9999), and writes tiled/deflated GeoTIFFs. **By default, the CLI uses windowed HTTP reads against the COGs** (no full-file downloads) and **normalizes outputs to physical units** with no GeoTIFF scale/offset metadata. If the remote can’t be mapped to a public HTTP URL, it falls back to the original rclone download path. Use `--no-windowed` to force full downloads and cache files, or `--no-unit-normalize` for raw debugging.
-
-All commands honor global flags such as `--quiet/--verbose`, `--limit`, `--var`, `--force`, `--max-workers`, and `--no-windowed`.
-
-| Command | Purpose | Common flags | Typical use | More info |
-| --- | --- | --- | --- | --- |
-| `chelsa-download download-present` | CHELSA v2.1 climatology (1981-2010) | `--var bio01`, `--limit 5`, `--force`, `--max-workers 6`, `--no-windowed`, `--no-unit-normalize` | Clip modern climatology layers for your AOI | [dataset info](https://www.chelsa-climate.org/datasets/chelsa_bioclim), [citation](https://www.doi.org/10.16904/envidat.332) |
-| `chelsa-download download-trace` | CHELSA TraCE21k paleoclimate | `--var bio01`, `--limit 50`, `--max-workers 4`, `--no-windowed`, `--no-unit-normalize` | Pull long paleoclimate series for model training | [dataset info](https://www.chelsa-climate.org/datasets/chelsa-trace21k-centennial-bioclim), [citation](https://www.doi.org/10.16904/envidat.211) |
-
-Example:
+Download and clip **CHELSA v2.1 present-day bioclim climatology** (1981–2010) for your AOI.
 
 ```bash
-# Quiet present-day fetch for all bioclims (using defaults)
-chelsa-download --aoi data/my_aoi.geojson download-present --max-workers 4
-
-# TraCE subset with limited files for testing
-chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 10
-
-# Force full downloads + caching
-chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-windowed
-
-# Disable unit normalization (debug only)
-chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-unit-normalize
+chelsa-download --aoi region.geojson download-present [OPTIONS]
 ```
 
-During downloads you’ll see a single progress bar with:
-- Total files completed vs. total in the list
-- Aggregate bytes downloaded (using list metadata)
-- Live download speed (averaged since the job started)
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--var` | `-v` | text (repeatable) | all | Filter to specific variables (e.g. `--var bio01 --var bio12`). Omit to download all available. |
+| `--limit` | | int | all | Process only the first N files. Useful for testing. |
+| `--force` | | flag | `False` | Re-download and overwrite existing outputs. |
+| `--max-workers` | | int | global | Override the global `--max-workers` for this command. |
+| `--windowed` / `--no-windowed` | | | `--windowed` | Use COG windowed HTTP reads (default) or force full-file downloads. |
+| `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Convert to physical units (default) or keep raw GeoTIFF values. |
+
+**Available variables:** `bio01`–`bio19`, `scd`
+
+**Examples:**
+
+```bash
+# Download all bioclim variables for your AOI
+chelsa-download --aoi aoi.geojson download-present
+
+# Download only bio01 and bio12
+chelsa-download --aoi aoi.geojson download-present --var bio01 --var bio12
+
+# Test with a single file, full download mode
+chelsa-download --aoi aoi.geojson download-present --var bio01 --limit 1 --no-windowed
+
+# Overwrite existing files
+chelsa-download --aoi aoi.geojson download-present --force
+```
+
+**Output directory:** `outputs/present/` (default)
+
+---
+
+### `download-trace`
+
+Download and clip **CHELSA-TraCE21k paleoclimate bioclim** rasters for your AOI. These cover 20,000 years of centennial bioclimatic variables.
+
+```bash
+chelsa-download --aoi region.geojson download-trace [OPTIONS]
+```
+
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--var` | `-v` | text (repeatable) | all | Filter to specific variables (e.g. `--var bio01`). |
+| `--limit` | | int | all | Process only the first N files. |
+| `--force` | | flag | `False` | Re-download and overwrite existing outputs. |
+| `--max-workers` | | int | global | Override parallel workers. |
+| `--windowed` / `--no-windowed` | | | `--windowed` | Windowed COG reads (default) or full downloads. |
+| `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Physical unit conversion (default) or raw values. |
+
+**Available variables:** `bio01`–`bio19`, `glz`, `orog`, `scd`, and others from the TraCE21k archive.
+
+**Examples:**
+
+```bash
+# Download bio01 paleoclimate series (limited to 10 files for testing)
+chelsa-download --aoi aoi.geojson download-trace --var bio01 --limit 10
+
+# Download everything with 8 parallel workers
+chelsa-download --aoi aoi.geojson download-trace --max-workers 8
+
+# Raw values, no unit conversion
+chelsa-download --aoi aoi.geojson download-trace --var bio01 --limit 5 --no-unit-normalize
+```
+
+**Output directory:** `outputs/trace/` (default)
+
+---
+
+### `download-present-monthly`
+
+Download and clip **CHELSA v2.1 present-day monthly climatologies** (1981–2010) for your AOI. Includes precipitation and temperature at monthly resolution.
+
+```bash
+chelsa-download --aoi region.geojson download-present-monthly [OPTIONS]
+```
+
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--var` | `-v` | text (repeatable) | all | Monthly variable: `pr`, `tasmin`, `tasmax`. |
+| `--month` | `-m` | int (repeatable) | 1–12 | Specific months (e.g. `--month 1 --month 7` for Jan & Jul). |
+| `--month-range` | | text | all | Inclusive month range (e.g. `--month-range 1-6` for Jan–Jun). |
+| `--limit` | | int | all | Process only the first N files. |
+| `--force` | | flag | `False` | Overwrite existing outputs. |
+| `--max-workers` | | int | global | Override parallel workers. |
+| `--windowed` / `--no-windowed` | | | `--windowed` | Windowed COG reads or full downloads. |
+| `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Physical unit conversion or raw values. |
+
+**Available variables:** `pr` (precipitation, mm/month), `tasmin` (minimum temperature, °C), `tasmax` (maximum temperature, °C)
+
+**Examples:**
+
+```bash
+# Download all monthly variables, all months
+chelsa-download --aoi aoi.geojson download-present-monthly
+
+# Only precipitation for January through June
+chelsa-download --aoi aoi.geojson download-present-monthly --var pr --month-range 1-6
+
+# Only July tasmin and tasmax
+chelsa-download --aoi aoi.geojson download-present-monthly --var tasmin --var tasmax --month 7
+```
+
+**Output directory:** `outputs/present_monthly/` (default)
+
+---
+
+### `download-trace-monthly`
+
+Download and clip **CHELSA-TraCE21k monthly centennial** data for your AOI. Covers -200 to 20 years BP in centennial steps, with 12 months per time slice.
+
+```bash
+chelsa-download --aoi region.geojson download-trace-monthly [OPTIONS]
+```
+
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--var` | `-v` | text (repeatable) | all | Monthly variable: `pr`, `tasmin`, `tasmax`. |
+| `--time-slice` | `-t` | int (repeatable) | all | Specific time slices in years BP (e.g. `--time-slice -200 --time-slice 0`). Range: -200 to 20. |
+| `--time-range` | | text | all | Inclusive time range (e.g. `--time-range -200--100`). |
+| `--time-interval` | | int | `None` | Step size within `--time-range` (e.g. `--time-interval 10` for every 10th slice). Must be positive. |
+| `--month` | `-m` | int (repeatable) | 1–12 | Specific months. |
+| `--month-range` | | text | all | Inclusive month range (e.g. `--month-range 6-8`). |
+| `--limit` | | int | all | Process only the first N files. |
+| `--force` | | flag | `False` | Overwrite existing outputs. |
+| `--max-workers` | | int | global | Override parallel workers. |
+| `--windowed` / `--no-windowed` | | | `--windowed` | Windowed COG reads or full downloads. |
+| `--unit-normalize` / `--no-unit-normalize` | | | `--unit-normalize` | Physical unit conversion or raw values. |
+
+**Available variables:** `pr` (precipitation, mm/month), `tasmin` (minimum temperature, °C), `tasmax` (maximum temperature, °C)
+
+**Time coverage:** -200 to 20 years BP (Before Present, where 0 = 1950 CE) in centennial steps.
+
+**Examples:**
+
+```bash
+# Download all monthly variables for all time slices
+chelsa-download --aoi aoi.geojson download-trace-monthly
+
+# Precipitation only, every 10th time slice from -200 to 0 BP
+chelsa-download --aoi aoi.geojson download-trace-monthly --var pr --time-range -200-0 --time-interval 10
+
+# Specific time slices, summer months only
+chelsa-download --aoi aoi.geojson download-trace-monthly --time-slice -200 --time-slice -100 --time-slice 0 --month-range 6-8
+
+# tasmin for January at time 0 BP
+chelsa-download --aoi aoi.geojson download-trace-monthly --var tasmin --time-slice 0 --month 1
+```
+
+**Output directory:** `outputs/trace_monthly/` (default)
+
+---
+
+### `prepare-lists`
+
+Generate the `.txt` file lists and `.meta.json` metadata files that the download commands consume. The package ships with pre-generated lists, so you only need this if the CHELSA buckets change or you want to refresh.
+
+```bash
+chelsa-download prepare-lists [OPTIONS]
+```
+
+| Option | Short | Type | Default | Description |
+|---|---|---|---|---|
+| `--kind` | `-k` | text | **required** | Which dataset to list: `trace`, `present`, `present_monthly`, or `trace_monthly`. |
+| `--source-json` | | Path | config default | Path to a pre-cached `rclone lsjson` output (only used with `--kind trace`). |
+
+**Step-by-step for TraCE21k lists:**
+
+```bash
+# 1. Snapshot the remote (produces a ~30-60 MB JSON)
+rclone lsjson chelsa01_trace21k_bioclim: --recursive > lists/raw/chelsatrace_filelist.json
+
+# 2. Build per-variable lists from the snapshot
+chelsa-download prepare-lists --kind trace --source-json lists/raw/chelsatrace_filelist.json
+```
+
+**For other datasets:**
+
+```bash
+# Present-day bioclim (queries the remote live)
+chelsa-download prepare-lists --kind present
+
+# Present-day monthly
+chelsa-download prepare-lists --kind present_monthly
+
+# TraCE21k monthly
+chelsa-download prepare-lists --kind trace_monthly
+```
+
+---
+
+## Variables & Units
+
+All outputs are float32 GeoTIFFs in physical units with no scale/offset tags, ensuring direct interoperability between present-day and TraCE21k rasters.
+
+### Bioclim Variables
+
+| Variable | Description | Units | Raw → Physical |
+|---|---|---|---|
+| `bio01` | Annual mean temperature | °C | `raw × 0.1 − 273.15` |
+| `bio02` | Mean diurnal range | °C | `raw × 0.1` |
+| `bio03` | Isothermality | % | Recomputed as `100 × (bio02 / bio07)` |
+| `bio04` | Temperature seasonality (std dev) | °C | `raw × 0.1` |
+| `bio05` | Max temperature of warmest month | °C | `raw × 0.1 − 273.15` |
+| `bio06` | Min temperature of coldest month | °C | `raw × 0.1 − 273.15` |
+| `bio07` | Temperature annual range | °C | Recomputed as `bio05 − bio06` |
+| `bio08` | Mean temperature of wettest quarter | °C | `raw × 0.1 − 273.15` |
+| `bio09` | Mean temperature of driest quarter | °C | `raw × 0.1 − 273.15` |
+| `bio10` | Mean temperature of warmest quarter | °C | `raw × 0.1 − 273.15` |
+| `bio11` | Mean temperature of coldest quarter | °C | `raw × 0.1 − 273.15` |
+| `bio12` | Annual precipitation | kg m⁻² year⁻¹ | Pass-through |
+| `bio13` | Precipitation of wettest month | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio14` | Precipitation of driest month | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio15` | Precipitation seasonality (CV) | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio16` | Precipitation of wettest quarter | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio17` | Precipitation of driest quarter | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio18` | Precipitation of warmest quarter | kg m⁻² month⁻¹ | `raw × 0.1` |
+| `bio19` | Precipitation of coldest quarter | kg m⁻² month⁻¹ | `raw × 0.1` |
+
+### Monthly Variables
+
+| Variable | Description | Units | Raw → Physical |
+|---|---|---|---|
+| `pr` | Precipitation | mm | `raw / 10.0` |
+| `tasmin` | Minimum temperature | °C | `raw / 10.0 − 273.15` |
+| `tasmax` | Maximum temperature | °C | `raw / 10.0 − 273.15` |
+
+### Derived variable recomputation
+
+When both dependencies are present in the same download batch, `bio07` and `bio03` are recomputed from their sources instead of using the raw conversion:
+
+- **`bio07`** = `bio05 − bio06` (temperature annual range, in °C)
+- **`bio03`** = `100 × (bio02 / bio07)` (isothermality, in %)
+
+Use `--no-unit-normalize` to skip all conversions and write raw integer values.
+
+---
+
+## Windowed COG Reads
+
+CHELSA GeoTIFFs are cloud-optimized (tiled + overviews). By default, the CLI resolves rclone remotes to public HTTPS URLs and uses GDAL's `/vsicurl/` driver to request only the byte ranges covering your AOI. This avoids downloading the full multi-hundred-MB global files.
+
+**When to use `--no-windowed`:**
+- Large AOIs that cover most of the globe (windowed reads become less efficient).
+- If the remote can't be mapped to a public HTTP URL (the CLI falls back automatically).
+- When you want to keep a local cache of full files.
+
+**GDAL tuning (set automatically):**
+- `GDAL_DISABLE_READDIR_ON_OPEN=EMPTY_DIR`
+- `GDAL_HTTP_MERGE_CONSECUTIVE_RANGES=YES`
+- `GDAL_HTTP_MULTIPLEX=YES` (HTTP/2)
+- `CPL_VSIL_CURL_CHUNK_SIZE=1048576` (1 MB chunks)
+
+### Benchmark
+
+Using `scripts/benchmark_windowed.py` with a ~10°×10° AOI:
+
+| Dataset | Remote file size | Windowed time | Full download time | Speedup |
+|---|---|---|---|---|
+| Present (`CHELSA_bio01_1981-2010_V.2.1.tif`) | 145.2 MB | 2.63 s | 28.81 s | **11×** |
+| TraCE21k (`CHELSA_TraCE21k_bio01_-200_V.1.0.tif`) | 121.5 MB | 1.82 s | 24.92 s | **14×** |
+
+---
+
+## Generating File Lists
+
+The CLI uses `.txt` + `.meta.json` pairs to know exactly which files exist, their sizes, and time ranges. The package ships with a set generated on 14-Nov-2025.
+
+| Step | Command | What it creates |
+|---|---|---|
+| 1 | `rclone lsjson chelsa01_trace21k_bioclim: --recursive > lists/raw/chelsatrace_filelist.json` | Raw JSON snapshot of TraCE21k bucket (~30–60 MB) |
+| 2 | `chelsa-download prepare-lists --kind trace --source-json lists/raw/chelsatrace_filelist.json` | `trace_*.txt` + `.meta.json` in lists/ |
+| 3 | `chelsa-download prepare-lists --kind present` | `present_*.txt` + `.meta.json` in lists/present/ |
+| 4 | `chelsa-download prepare-lists --kind present_monthly` | `present_monthly_*.txt` + `.meta.json` |
+| 5 | `chelsa-download prepare-lists --kind trace_monthly` | `trace_monthly_*.txt` + `.meta.json` |
+
+---
+
+## Tips for Large Downloads
+
+- **Cache sizing:** When using `--no-windowed`, keep `chelsa_cache/` on an SSD with a few GB free — each raw GeoTIFF can be 0.5–2 GB.
+- **Parallelism:** Tune `--max-workers` to match your network throughput. Default is 6.
+- **List freshness:** If the CHELSA bucket changes, regenerate lists with `prepare-lists` so metadata hashes match.
+- **AOI CRS:** If your AOI file lacks a CRS, WGS 84 (EPSG:4326) is assumed. Set it explicitly in your GIS software to avoid surprises.
+- **Resume:** If downloads stop mid-way, simply rerun the command — existing outputs are skipped unless `--force` is used.
+
+---
+
+## Troubleshooting
+
+| Problem | Solution |
+|---|---|
+| **"Config file not found"** | Pass `--aoi path/to/AOI.geojson` to use bundled defaults, or create a TOML config. |
+| **"rclone: command not found"** | Install rclone from [rclone.org/install](https://rclone.org/install/) and ensure it's on your PATH. |
+| **GeoPandas can't open AOI** | Use GeoJSON or GeoPackage. For Shapefiles, keep all sidecar files (`.shx`, `.dbf`, `.prj`) in the same directory. |
+| **Downloads stop mid-way** | Check disk space, then rerun with `--force` to retry failed files. |
+| **Values look wrong** | You may have used `--no-unit-normalize`. Rerun without it to get physical units. |
+| **Slow downloads** | Ensure you're using the default windowed mode (don't pass `--no-windowed`). Reduce `--max-workers` if the server throttles connections. |
+
+---
+
+## Progress Display
+
+During downloads, a single Rich progress bar shows:
+
+- Files completed / total
+- Cumulative bytes downloaded
+- Live transfer speed
 - Elapsed and estimated remaining time
 
----
-
-### Units & normalization (default)
-
-All outputs are written as float32 in physical units with **no GeoTIFF scale/offset metadata**. This ensures that present-day and TraCE21k rasters are directly interoperable.
-
-**Units by variable group:**
-
-| Variable group | Output units | Notes |
-| --- | --- | --- |
-| bio01, bio05, bio06, bio08, bio09, bio10, bio11 | degC | Absolute temperatures |
-| bio02, bio07 | degC | `quantity=temperature_range` |
-| bio04 | degC | `quantity=temperature_stdev` |
-| bio03 | % | `quantity=isothermality` (computed as `100 * bio02 / bio07`) |
-| bio12 | kg m-2 year-1 | Annual precipitation |
-| bio13–bio19 | kg m-2 month-1 | Monthly/seasonal precipitation |
-
-Derived variables are recomputed whenever dependencies are requested:
-- `bio07 = bio05 - bio06` (degC)
-- `bio03 = 100 * (bio02 / bio07)` (%)
-
-Use `--no-unit-normalize` only for debugging; it disables these conversions.
+Use `--quiet` to suppress the progress bar, or `--verbose` for per-file debug logging.
 
 ---
 
-### Windowed (COG) reads (default)
+## Bundled Remotes
 
-The CHELSA GeoTIFFs are cloud-optimized (tiled + overviews), which means GDAL can request only the needed byte ranges over HTTP when you clip to a small AOI. The CLI uses this windowed mode by default, which *skips full downloads* when a public HTTP mapping can be resolved for the rclone remote.
+The `envicloud.conf` file ships with anonymous S3 remotes for CHELSA data:
 
-Use `--no-windowed` if you need the original full-download behavior:
+| Remote name | Dataset | Endpoint |
+|---|---|---|
+| `chelsa02_bioclim` | CHELSA v2.1 bioclim (present-day) | `os.unil.cloud.switch.ch` |
+| `chelsa02_climatologies` | CHELSA v2.1 monthly climatologies | `os.unil.cloud.switch.ch` |
+| `chelsa01_trace21k_bioclim` | CHELSA-TraCE21k bioclim | `os.zhdk.cloud.switch.ch` |
+| `chelsa01_trace_centennial` | CHELSA-TraCE21k monthly centennial | `os.zhdk.cloud.switch.ch` |
 
-```bash
-# Present-day, force full download + cache
-chelsa-download --aoi data/my_aoi.geojson download-present --var bio01 --limit 1 --no-windowed
-
-# TraCE21k, force full download + cache
-chelsa-download --aoi data/my_aoi.geojson download-trace --var bio01 --limit 1 --no-windowed
-```
-
-Notes:
-- Windowed reads work automatically for the default CHELSA remotes (via `envicloud.conf`). If the remote can’t be mapped to a public URL, the CLI falls back to the original full-download path.
-- In windowed mode, cache files are not created because data is read directly from the remote COG.
-- Large AOIs may still read a lot of tiles; small AOIs see the biggest speedups.
-- Unit normalization is always applied unless you pass `--no-unit-normalize`.
-
-For verification and benchmarking, see:
-- `scripts/verify_cog_range.py`
-- `scripts/benchmark_windowed.py`
-
-#### Benchmark (run on January 29, 2026)
-
-Using `scripts/benchmark_windowed.py` with bounds `-10 35 10 45` (roughly a small AOI in WGS84):
-
-| Dataset | Remote file size | Window read time | Full download time | Time speedup |
-| --- | --- | --- | --- | --- |
-| Present (`CHELSA_bio01_1981-2010_V.2.1.tif`) | 145.2 MB | 2.63 s | 28.81 s | 11.0x |
-| TraCE21k (`CHELSA_TraCE21k_bio01_-200_V.1.0.tif`) | 121.5 MB | 1.82 s | 24.92 s | 13.7x |
-
-These numbers will vary by network, AOI size, and disk performance, but they demonstrate that the COG windowed path avoids full-file transfers.
+No credentials required — all buckets use anonymous access.
 
 ---
 
-### Tips for large pulls
+## License
 
-- **Cache sizing:** If using `--no-windowed`, keep `./chelsa_cache` on an SSD with at least a few GB free; each raw TIFF can be 0.5–2 GB.
-- **Parallelism:** Tune `--max-workers` (or `downloads.max_workers`) to match your network/storage throughput.
-- **List freshness:** If the CHELSA bucket changes, rerun the `prepare-lists` commands so metadata hashes match the `.txt` files.
-- **AOI CRS:** If your AOI lacks a CRS the tool assumes WGS84 (EPSG:4326). Set it explicitly in your GIS before running downloads.
-
----
-
-### Troubleshooting / FAQ
-
-- **“Config file not found”** – Pass `--aoi path/to/AOI.geojson` and the CLI will use the bundled defaults. Copy the sample TOML later if you need custom paths.
-- **“rclone: command not found”** – Install rclone from [rclone.org/install](https://rclone.org/install/) and make sure it’s on your PATH. You can also point `rclone.config` at a different config file if needed.
-- **GeoPandas can’t open my AOI** – Convert the AOI to GeoJSON or GeoPackage. Shapefiles must include all sidecar files in the same directory.
-- **Downloads stop mid-way** – Check disk space in the cache/output folders and rerun the command with `--force` to retry failed files.
-- **Wrong files got clipped** – Confirm you regenerated the lists after changing remotes, and verify the AOI path (logged at start-up).
-
-With the bundled lists, default remotes, and AOI override, you can go from zero to clipped CHELSA rasters in a couple of commands—then fine-tune via the TOML whenever you need more control. Happy downloading!
+[MIT](LICENSE) — Copyright (c) 2025 Miguel Aristizabal
