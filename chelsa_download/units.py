@@ -12,7 +12,7 @@ TEMP_RANGE_VARS = {"bio02", "bio04", "bio07"}
 PRECIP_ANNUAL_VARS = {"bio12"}
 PRECIP_MONTHLY_VARS = {"bio13", "bio14", "bio15", "bio16", "bio17", "bio18", "bio19"}
 MONTHLY_TEMP_VARS = {"tasmin", "tasmax"}  # K*10 -> degC
-MONTHLY_PRECIP_VAR = {"pr"}  # mm*10 -> mm
+MONTHLY_PRECIP_VAR = {"pr"}
 
 
 @dataclass(frozen=True)
@@ -143,8 +143,11 @@ def normalize_units(
         elif var in PRECIP_MONTHLY_VARS:
             arr[valid] = arr[valid] * 0.1
         elif var in MONTHLY_PRECIP_VAR:
-            # pr: mm*10 -> mm
-            arr[valid] = arr[valid] / 10.0
+            # Present monthly pr is stored as mm*10, but TraCE monthly pr is already in mm.
+            if product == "trace_monthly":
+                arr[valid] = arr[valid]
+            else:
+                arr[valid] = arr[valid] / 10.0
 
     arr = _apply_mask(arr, mask, nodata_value)
     dataarray.data = arr

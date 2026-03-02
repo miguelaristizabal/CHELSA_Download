@@ -27,3 +27,7 @@ outputs/
 Thumbs.db
 *.swp
 *.swo
+chelsa_download/__pycache__/processing.cpython-313.pyc
+chelsa_download/__pycache__/rclone_helper.cpython-313.pyc
+chelsa_download/__pycache__/config.cpython-313.pyc
+chelsa_download/__pycache__/config.cpython-313.pyc

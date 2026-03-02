@@ -40,10 +40,15 @@ The tool automatically applies unit normalization when `--unit-normalize` is ena
 - **Conversion**: `(value / 10.0) - 273.15`
 - **Example**: Raw value 2881 → 15.1°C
 
-### Precipitation (pr)
+### Precipitation (pr), present monthly
 - **Raw format**: mm × 10 (integer)
 - **Normalized**: mm (float)
 - **Conversion**: `value / 10.0`
+
+### Precipitation (pr), TraCE21k monthly
+- **Raw format**: mm (integer/float, no scale factor)
+- **Normalized**: mm (float)
+- **Conversion**: `value`
 - **Example**: Raw value 1234 → 123.4 mm
 
 ## Configuration

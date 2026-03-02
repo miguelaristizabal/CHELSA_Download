@@ -41,3 +41,21 @@ def test_recompute_bio07_and_bio03():
     bio03 = recompute_bio03(bio02, bio07, -9999.0, _logger())
     assert np.isclose(float(bio03[0]), 100.0 * (20.0 / 6.0), atol=1e-2)
     assert float(bio03[1]) == -9999.0
+
+
+def test_normalize_present_monthly_pr_scales_by_tenth():
+    raw = xr.DataArray(np.array([123.0, -9999.0], dtype=np.float32))
+    ctx = NormalizationContext(unit_normalize=True, recompute_bio07=False, recompute_bio03=False)
+    normalized, tags = normalize_units("present_monthly", "pr", raw, -9999.0, _logger(), ctx)
+    assert np.isclose(float(normalized.data[0]), 12.3, atol=1e-6)
+    assert float(normalized.data[1]) == -9999.0
+    assert tags["units"] == "mm"
+
+
+def test_normalize_trace_monthly_pr_uses_raw_mm_values():
+    raw = xr.DataArray(np.array([123.0, -9999.0], dtype=np.float32))
+    ctx = NormalizationContext(unit_normalize=True, recompute_bio07=False, recompute_bio03=False)
+    normalized, tags = normalize_units("trace_monthly", "pr", raw, -9999.0, _logger(), ctx)
+    assert np.isclose(float(normalized.data[0]), 123.0, atol=1e-6)
+    assert float(normalized.data[1]) == -9999.0
+    assert tags["units"] == "mm"

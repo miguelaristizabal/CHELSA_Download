@@ -21,7 +21,7 @@ Verify: `rclone version`
 ### 2. Install chelsa-download
 
 ```bash
-pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.4.1.tar.gz"
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.4.2.tar.gz"
 ```
 
 ### 3. Download your first raster
@@ -70,10 +70,10 @@ That's it. The clipped raster lands in `outputs/present/` in your current direct
 ### From GitHub release (recommended)
 
 ```bash
-pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.4.1.tar.gz"
+pip install "https://github.com/miguelaristizabal/CHELSA_Download/archive/refs/tags/v0.4.2.tar.gz"
 ```
 
-Replace `v0.4.1` with the desired release tag if needed.
+Replace `v0.4.2` with the desired release tag if needed.
 
 ### Development install (from source)
 
@@ -472,13 +472,14 @@ TraCE21k uses the same general encoding for most variables, but **`bio07` is sto
 | `bio12` | Annual precipitation | kg m⁻² year⁻¹ | Pass-through |
 | `bio13`–`bio19` | Monthly/seasonal precipitation | kg m⁻² month⁻¹ | `raw × 0.1` |
 
-### Monthly variable conversions (both datasets)
+### Monthly variable conversions
 
-Monthly variables use the same encoding in both present-day and TraCE21k:
+Monthly temperatures use the same encoding in both present-day and TraCE21k, but monthly precipitation does not:
 
 | Variable | Description | Units | Conversion |
 |---|---|---|---|
-| `pr` | Precipitation | mm | `raw / 10.0` |
+| `pr` in present monthly | Precipitation | mm | `raw / 10.0` |
+| `pr` in TraCE21k monthly | Precipitation | mm | `raw` |
 | `tasmin` | Minimum temperature | °C | `raw / 10.0 − 273.15` |
 | `tasmax` | Maximum temperature | °C | `raw / 10.0 − 273.15` |
 
